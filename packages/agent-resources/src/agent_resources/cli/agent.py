@@ -4,14 +4,14 @@ from typing import Annotated
 
 import typer
 
-from skill_add.cli.common import get_destination, parse_resource_ref
-from skill_add.exceptions import (
+from agent_resources.cli.common import get_destination, parse_resource_ref
+from agent_resources.exceptions import (
     ClaudeAddError,
     RepoNotFoundError,
     ResourceExistsError,
     ResourceNotFoundError,
 )
-from skill_add.fetcher import ResourceType, fetch_resource
+from agent_resources.fetcher import ResourceType, fetch_resource
 
 app = typer.Typer(
     add_completion=False,
@@ -45,7 +45,7 @@ def add(
     ] = False,
 ) -> None:
     """
-    Add a sub-agent from a GitHub user's agent-skills repository.
+    Add a sub-agent from a GitHub user's agent-resources repository.
 
     The agent will be copied to .claude/agents/<agent-name>.md in the
     current directory (or ~/.claude/agents/ with --global).
@@ -63,7 +63,7 @@ def add(
     dest = get_destination("agents", global_install)
     scope = "user" if global_install else "project"
 
-    typer.echo(f"Fetching agent '{agent_name}' from {username}/agent-skills...")
+    typer.echo(f"Fetching agent '{agent_name}' from {username}/agent-resources...")
 
     try:
         agent_path = fetch_resource(

@@ -1,4 +1,4 @@
-"""Shared exception classes for skill-add."""
+"""Shared exception classes for agent-resources."""
 
 
 class ClaudeAddError(Exception):
@@ -8,7 +8,7 @@ class ClaudeAddError(Exception):
 
 
 class RepoNotFoundError(ClaudeAddError):
-    """Raised when the agent-skills repo doesn't exist."""
+    """Raised when the agent-resources repo doesn't exist."""
 
     pass
 

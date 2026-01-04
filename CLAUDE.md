@@ -1,56 +1,56 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+This file provides guidance to Claude Code when working with code in this repository.
 
 ## Project Overview
 
-skill-add is a CLI tool that fetches Claude Code resources (skills, slash commands, and sub-agents) from GitHub and installs them locally. It downloads resources from a user's `agent-skills` repository and copies them to `.claude/` in the current directory or `~/.claude/` for global installation.
+This is a Python monorepo containing CLI tools for installing Claude Code resources (skills, commands, and sub-agents) from GitHub repositories.
 
-## Commands
+## Repository Structure
 
-```bash
-# Install dependencies
-uv sync
-
-# Run the CLI locally
-uv run skill-add <username>/<skill-name>
-uv run skill-add <username>/<skill-name> --overwrite
-uv run skill-add <username>/<skill-name> --global
-
-uv run command-add <username>/<command-name>
-uv run agent-add <username>/<agent-name>
-
-# Build the package
-uv build
 ```
+packages/
+├── agent-resources/     # Core library with shared fetching logic, exposes all three CLIs
+├── skill-add/           # Thin wrapper for `uvx skill-add`
+├── command-add/         # Thin wrapper for `uvx command-add`
+├── agent-add/           # Thin wrapper for `uvx agent-add`
+├── add-skill/           # Thin wrapper for `uvx add-skill` (alternative naming)
+├── add-command/         # Thin wrapper for `uvx add-command` (alternative naming)
+└── add-agent/           # Thin wrapper for `uvx add-agent` (alternative naming)
+```
+
+**Primary usage pattern** is via uvx for one-off execution:
+```bash
+# Either naming convention works:
+uvx skill-add <username>/<skill-name>
+uvx add-skill <username>/<skill-name>
+
+uvx command-add <username>/<command-name>
+uvx add-command <username>/<command-name>
+
+uvx agent-add <username>/<agent-name>
+uvx add-agent <username>/<agent-name>
+```
+
+The individual packages exist to enable this clean uvx UX. They are thin wrappers that depend on `agent-resources`, which contains the shared core logic.
+
 
 ## Architecture
 
-The codebase is a Python CLI with these main modules:
+**Core Components** (in `packages/agent-resources/src/agent_resources/`):
+- `fetcher.py` - Generic resource fetcher that downloads from GitHub tarballs and extracts resources
+- `cli/common.py` - Shared CLI utilities (argument parsing, destination resolution)
+- `cli/skill.py`, `cli/command.py`, `cli/agent.py` - Typer CLI apps for each resource type
+- `exceptions.py` - Custom exception hierarchy
 
-### Core Modules
+**Resource Types**:
+- Skills: Directories copied to `.claude/skills/<name>/`
+- Commands: Single `.md` files copied to `.claude/commands/<name>.md`
+- Agents: Single `.md` files copied to `.claude/agents/<name>.md`
 
-- `src/skill_add/exceptions.py` - Shared exception classes (`ClaudeAddError`, `RepoNotFoundError`, `ResourceNotFoundError`, `ResourceExistsError`)
-- `src/skill_add/fetcher.py` - Generic resource fetcher with `ResourceType` enum and `fetch_resource()` function
+**Fetching Pattern**: Resources are fetched from `https://github.com/<username>/agent-resources/` repositories by downloading the main branch tarball and extracting the specific resource.
 
-### CLI Modules
+## Dependencies
 
-- `src/skill_add/cli/common.py` - Shared CLI utilities (`parse_resource_ref()`, `get_destination()`)
-- `src/skill_add/cli/skill.py` - `skill-add` CLI (for skills - directories)
-- `src/skill_add/cli/command.py` - `command-add` CLI (for slash commands - .md files)
-- `src/skill_add/cli/agent.py` - `agent-add` CLI (for sub-agents - .md files)
-
-### Backward Compatibility
-
-- `src/skill_add/cli.py` - Re-exports from `cli/skill.py`
-- `src/skill_add/github.py` - Re-exports from `fetcher.py` with legacy exception aliases
-
-## Resource Types
-
-| Resource | Source Path | Local Path | Type |
-|----------|-------------|------------|------|
-| Skill | `.claude/skills/<name>/` | `.claude/skills/<name>/` | Directory |
-| Command | `.claude/commands/<name>.md` | `.claude/commands/<name>.md` | File |
-| Agent | `.claude/agents/<name>.md` | `.claude/agents/<name>.md` | File |
-
-The tool expects resources to be located at the corresponding paths within the source `agent-skills` repository.
+- `httpx` - HTTP client for downloading from GitHub
+- `typer` - CLI framework

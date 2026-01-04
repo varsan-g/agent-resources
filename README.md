@@ -1,82 +1,77 @@
-# skill-add
+# agent-resources
 
-Add Claude Code skills, slash commands, and sub-agents from GitHub to your project.
+CLI tools to install Claude Code resources (skills, commands, and sub-agents) from GitHub.
+
+## Installation
+
+### Option 1: Install all commands (pip)
+
+```bash
+pip install agent-resources
+```
+
+This gives you all three commands:
+- `skill-add` - Install skills
+- `command-add` - Install slash commands
+- `agent-add` - Install sub-agents
+
+### Option 2: One-off usage (uvx)
+
+```bash
+# Either naming convention works:
+uvx skill-add <username>/<skill-name>
+uvx add-skill <username>/<skill-name>
+
+uvx command-add <username>/<command-name>
+uvx add-command <username>/<command-name>
+
+uvx agent-add <username>/<agent-name>
+uvx add-agent <username>/<agent-name>
+```
 
 ## Usage
 
 ```bash
-# Add a skill (directory)
-uvx skill-add <username>/<skill-name>
+# Install a skill
+skill-add kasperjunge/analyze-paper
 
-# Add a slash command (.md file)
-uvx --from skill-add command-add <username>/<command-name>
+# Install a slash command
+command-add kasperjunge/commit
 
-# Add a sub-agent (.md file)
-uvx --from skill-add agent-add <username>/<agent-name>
+# Install a sub-agent
+agent-add kasperjunge/code-reviewer
+
+# Install globally (to ~/.claude/)
+skill-add kasperjunge/analyze-paper --global
+
+# Overwrite existing
+skill-add kasperjunge/analyze-paper --overwrite
 ```
 
-These commands fetch resources from the user's `agent-skills` repository on GitHub and copy them to your local `.claude/` directory.
+## Creating Your Own Resources
 
-### Options
+Create a GitHub repository named `agent-resources` with the following structure:
 
-All commands support these options:
+```
+agent-resources/
+├── .claude/
+│   ├── skills/
+│   │   └── my-skill/
+│   │       └── skill.md
+│   ├── commands/
+│   │   └── my-command.md
+│   └── agents/
+│       └── my-agent.md
+```
 
-- `--overwrite`: Replace an existing resource if it exists
-- `--global, -g`: Install to `~/.claude/` (user-level) instead of `./.claude/` (project-level)
-
-### Examples
+Others can then install your resources:
 
 ```bash
-# Add a skill to current project
-uvx skill-add kasperjunge/analyze-paper
-
-# Add a skill globally (available in all projects)
-uvx skill-add kasperjunge/analyze-paper --global
-
-# Overwrite an existing skill
-uvx skill-add kasperjunge/analyze-paper --overwrite
-
-# Add a slash command
-uvx --from skill-add command-add kasperjunge/commit
-
-# Add a sub-agent globally
-uvx --from skill-add agent-add kasperjunge/code-reviewer --global
+skill-add yourusername/my-skill
+command-add yourusername/my-command
+agent-add yourusername/my-agent
 ```
 
-## Repository Structure
+## License
 
-Your `agent-skills` repository should have this structure:
-
-```
-agent-skills/
-└── .claude/
-    ├── skills/
-    │   ├── skill-one/
-    │   │   └── SKILL.md
-    │   └── skill-two/
-    │       ├── SKILL.md
-    │       └── scripts/
-    │           └── helper.py
-    ├── commands/
-    │   ├── commit.md
-    │   └── review-pr.md
-    └── agents/
-        ├── code-reviewer.md
-        └── test-writer.md
-```
-
-- **Skills**: Directories containing at minimum a `SKILL.md` file
-- **Commands**: Single markdown files (`.md`) defining slash commands
-- **Agents**: Single markdown files (`.md`) defining sub-agents
-
-## Installation
-
-```bash
-# Run directly with uvx (recommended)
-uvx skill-add <username>/<skill-name>
-uvx --from skill-add command-add <username>/<command-name>
-uvx --from skill-add agent-add <username>/<agent-name>
-
-# Or install globally
-pip install skill-add
-```
+MIT

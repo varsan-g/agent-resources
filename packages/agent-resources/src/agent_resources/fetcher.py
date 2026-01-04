@@ -9,7 +9,7 @@ from pathlib import Path
 
 import httpx
 
-from skill_add.exceptions import (
+from agent_resources.exceptions import (
     ClaudeAddError,
     RepoNotFoundError,
     ResourceExistsError,
@@ -60,6 +60,9 @@ RESOURCE_CONFIGS: dict[ResourceType, ResourceConfig] = {
     ),
 }
 
+# Name of the repository to fetch resources from
+REPO_NAME = "agent-resources"
+
 
 def fetch_resource(
     username: str,
@@ -69,7 +72,7 @@ def fetch_resource(
     overwrite: bool = False,
 ) -> Path:
     """
-    Fetch a resource from a user's agent-skills repo and copy it to dest.
+    Fetch a resource from a user's agent-resources repo and copy it to dest.
 
     Args:
         username: GitHub username
@@ -82,7 +85,7 @@ def fetch_resource(
         Path to the installed resource
 
     Raises:
-        RepoNotFoundError: If the agent-skills repo doesn't exist
+        RepoNotFoundError: If the agent-resources repo doesn't exist
         ResourceNotFoundError: If the resource doesn't exist in the repo
         ResourceExistsError: If resource exists locally and overwrite=False
     """
@@ -103,7 +106,7 @@ def fetch_resource(
 
     # Download tarball
     tarball_url = (
-        f"https://github.com/{username}/agent-skills/archive/refs/heads/main.tar.gz"
+        f"https://github.com/{username}/{REPO_NAME}/archive/refs/heads/main.tar.gz"
     )
 
     with tempfile.TemporaryDirectory() as tmp_dir:
@@ -116,7 +119,7 @@ def fetch_resource(
                 response = client.get(tarball_url)
                 if response.status_code == 404:
                     raise RepoNotFoundError(
-                        f"Repository '{username}/agent-skills' not found on GitHub."
+                        f"Repository '{username}/{REPO_NAME}' not found on GitHub."
                     )
                 response.raise_for_status()
 
@@ -132,8 +135,8 @@ def fetch_resource(
             tar.extractall(extract_path)
 
         # Find the resource in extracted content
-        # Tarball extracts to: agent-skills-main/.claude/<type>/<name>[.md]
-        repo_dir = extract_path / "agent-skills-main"
+        # Tarball extracts to: agent-resources-main/.claude/<type>/<name>[.md]
+        repo_dir = extract_path / f"{REPO_NAME}-main"
 
         if config.is_directory:
             resource_source = repo_dir / config.source_subdir / name
@@ -146,7 +149,7 @@ def fetch_resource(
             else:
                 expected_location = f"{config.source_subdir}/{name}{config.file_extension}"
             raise ResourceNotFoundError(
-                f"{resource_type.value.capitalize()} '{name}' not found in {username}/agent-skills.\n"
+                f"{resource_type.value.capitalize()} '{name}' not found in {username}/{REPO_NAME}.\n"
                 f"Expected location: {expected_location}"
             )
 
