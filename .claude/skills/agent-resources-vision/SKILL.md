@@ -75,6 +75,92 @@ This document defines the ideal outcomes we're building toward. Use it to guide 
 
 ---
 
+## The Growth Flywheel
+
+```
+                    ┌─────────────────────┐
+                    │   USER TRIES A      │
+                    │   RESOURCE          │
+                    │   uvx add-skill ... │
+                    └──────────┬──────────┘
+                               │
+                               ▼
+         ┌─────────────────────────────────────────┐
+         │                                         │
+         │         EXPERIENCES VALUE               │
+         │         "This actually helps me"        │
+         │                                         │
+         └──────────┬─────────────────────┬────────┘
+                    │                     │
+        ┌───────────▼───────────┐   ┌─────▼─────────────┐
+        │                       │   │                   │
+        │   SHARES WITH OTHERS  │   │  BECOMES CREATOR  │
+        │   "Try uvx add-skill  │   │  "I could make    │
+        │    username/skill"    │   │   one of these"   │
+        │                       │   │                   │
+        └───────────┬───────────┘   └─────┬─────────────┘
+                    │                     │
+                    │                     ▼
+                    │         ┌───────────────────────┐
+                    │         │  CREATES & PUBLISHES  │
+                    │         │  uvx create-agent-    │
+                    │         │  resources-repo       │
+                    │         │  --github             │
+                    │         └───────────┬───────────┘
+                    │                     │
+                    │                     │ shares their creation
+                    │                     │
+                    └──────────┬──────────┘
+                               │
+                               ▼
+                    ┌─────────────────────┐
+                    │   MORE PEOPLE       │
+                    │   DISCOVER          │◄───── loop continues
+                    └─────────────────────┘
+```
+
+### What Makes It Spin
+
+**Zero-Friction Entry Points**
+- **Try**: `uvx add-skill username/skill` — no install, no signup, no docs
+- **Create**: `uvx create-agent-resources-repo --github` — repo live in 30 seconds
+- **Share**: One sentence contains complete onboarding
+
+**Every User Is a Distribution Channel**
+- Sharing a resource = sharing the ecosystem
+- "Try `uvx add-skill me/cool-skill`" teaches the pattern
+- No learning curve for recipients
+
+**Creators Have Skin in the Game**
+- Creators want their resources used → they evangelize
+- Every creator brings their network
+- Pride of authorship drives quality
+
+**Compounding Value**
+- More resources → higher chance someone finds what they need
+- More diverse creators → more use cases covered
+- Community quality rises as patterns emerge
+
+### Acceleration Levers
+
+| Lever | Effect |
+|-------|--------|
+| **Featured resources** | Curated list shows what's possible |
+| **Social proof** | "X people installed this" |
+| **Creator spotlights** | Recognition motivates contribution |
+| **Templates** | Lower barrier to high-quality resources |
+| **Discoverability** | Community index makes finding easy |
+
+### The Virtuous Cycle
+
+```
+More Resources → More Value → More Users → More Sharing → More Creators → More Resources
+```
+
+**Critical insight**: The one-liner install command is both the product AND the marketing. Every share teaches the pattern while delivering value.
+
+---
+
 ## Decision-Making Guide
 
 When uncertain about a feature or design choice, ask:
