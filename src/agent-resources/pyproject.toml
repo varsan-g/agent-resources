@@ -16,6 +16,9 @@ dependencies = [
 ]
 
 [project.scripts]
+add-skill = "agent_resources.cli.skill:app"
+add-command = "agent_resources.cli.command:app"
+add-agent = "agent_resources.cli.agent:app"
 install-skill = "agent_resources.cli.skill:app"
 install-command = "agent_resources.cli.command:app"
 install-agent = "agent_resources.cli.agent:app"

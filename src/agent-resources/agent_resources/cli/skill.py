@@ -1,4 +1,4 @@
-"""CLI for install-skill command."""
+"""CLI for add-skill command."""
 
 from typing import Annotated
 
@@ -51,8 +51,8 @@ def add(
     directory (or ~/.claude/skills/ with --global).
 
     Example:
-        install-skill kasperjunge/analyze-paper
-        install-skill kasperjunge/analyze-paper --global
+        add-skill kasperjunge/analyze-paper
+        add-skill kasperjunge/analyze-paper --global
     """
     try:
         username, skill_name = parse_resource_ref(skill_ref)

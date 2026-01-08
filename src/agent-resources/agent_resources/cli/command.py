@@ -1,4 +1,4 @@
-"""CLI for install-command command."""
+"""CLI for add-command command."""
 
 from typing import Annotated
 
@@ -51,8 +51,8 @@ def add(
     current directory (or ~/.claude/commands/ with --global).
 
     Example:
-        install-command kasperjunge/commit
-        install-command kasperjunge/review-pr --global
+        add-command kasperjunge/commit
+        add-command kasperjunge/review-pr --global
     """
     try:
         username, command_name = parse_resource_ref(command_ref)

@@ -4,7 +4,7 @@
 
 **Share and install Claude Code skills, commands, and agents with a single command.**
 
-*Like pip or npm, but for Claude Code resources.*
+*Like pip, but for Claude Code resources.*
 
 [![PyPI](https://img.shields.io/pypi/v/agent-resources?color=blue)](https://pypi.org/project/agent-resources/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
@@ -20,7 +20,7 @@
 No installation needed. Just run:
 
 ```bash
-uvx install-skill kasperjunge/hello-world
+uvx add-skill kasperjunge/hello-world
 ```
 
 **That's it.** The skill is now available in Claude Code.
@@ -30,9 +30,9 @@ uvx install-skill kasperjunge/hello-world
 ## Install Any Resource
 
 ```bash
-uvx install-skill <username>/<skill-name>       # Skills
-uvx install-command <username>/<command-name>   # Slash commands
-uvx install-agent <username>/<agent-name>       # Sub-agents
+uvx add-skill <username>/<skill-name>       # Skills
+uvx add-command <username>/<command-name>   # Slash commands
+uvx add-agent <username>/<agent-name>       # Sub-agents
 ```
 
 ---
@@ -56,7 +56,7 @@ uvx create-agent-resources-repo --github
 - Instant shareability — tell others:
 
 ```bash
-uvx install-skill <your-username>/hello-world
+uvx add-skill <your-username>/hello-world
 ```
 
 ### Add Your Own Resources
@@ -79,7 +79,7 @@ Push to GitHub. No registry, no publishing step.
 
 Sharing is just a message:
 
-> *"This skill saves me hours — try `uvx install-skill yourname/cool-skill`"*
+> *"This skill saves me hours — try `uvx add-skill yourname/cool-skill`"*
 
 **One command. Zero friction.** The more you share, the more the community grows.
 
@@ -92,9 +92,9 @@ Sharing is just a message:
 A comprehensive Claude Code toolkit for Go developers.
 
 ```bash
-uvx install-skill dsjacobsen/golang-pro      # Expert Go knowledge
-uvx install-agent dsjacobsen/go-reviewer     # Code review agent
-uvx install-command dsjacobsen/go-check      # Quick code check
+uvx add-skill dsjacobsen/golang-pro      # Expert Go knowledge
+uvx add-agent dsjacobsen/go-reviewer     # Code review agent
+uvx add-command dsjacobsen/go-check      # Quick code check
 ```
 
 **Includes**: 1 skill, 9 agents, 11 commands covering scaffolding, testing, API building, refactoring, and more.

@@ -18,23 +18,21 @@ agent-resources-project/
 │   │       ├── fetcher.py         # GitHub tarball fetching
 │   │       ├── exceptions.py      # Custom exceptions
 │   │       └── ...
-│   └── agent-resources-npm/       # npm core library (future)
 ├── command-packages/
 │   ├── pypi/                      # PyPI wrapper packages
-│   │   ├── install-skill/         # `uvx install-skill`
-│   │   ├── install-command/       # `uvx install-command`
-│   │   ├── install-agent/         # `uvx install-agent`
+│   │   ├── add-skill/             # `uvx add-skill`
+│   │   ├── add-command/           # `uvx add-command`
+│   │   ├── add-agent/             # `uvx add-agent`
 │   │   └── create-agent-resources-repo/
-│   └── npm/                       # npm wrapper packages (future)
 ├── CLAUDE.md
 └── README.md
 ```
 
 **Primary usage pattern** is via uvx for one-off execution:
 ```bash
-uvx install-skill <username>/<skill-name>
-uvx install-command <username>/<command-name>
-uvx install-agent <username>/<agent-name>
+uvx add-skill <username>/<skill-name>
+uvx add-command <username>/<command-name>
+uvx add-agent <username>/<agent-name>
 uvx create-agent-resources-repo
 ```
 

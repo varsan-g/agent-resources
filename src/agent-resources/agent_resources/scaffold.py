@@ -61,13 +61,13 @@ Others can install my resources using:
 
 ```bash
 # Install a skill
-uvx install-skill {username}/hello-world
+uvx add-skill {username}/hello-world
 
 # Install a command
-uvx install-command {username}/hello
+uvx add-command {username}/hello
 
 # Install an agent
-uvx install-agent {username}/hello-agent
+uvx add-agent {username}/hello-agent
 ```
 
 ## Adding Resources

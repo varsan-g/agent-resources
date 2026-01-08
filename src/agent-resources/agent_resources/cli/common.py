@@ -1,4 +1,4 @@
-"""Shared CLI utilities for install-skill, install-command, and install-agent."""
+"""Shared CLI utilities for add-skill, add-command, and add-agent."""
 
 import random
 from contextlib import contextmanager
@@ -70,6 +70,6 @@ def print_success_message(resource_type: str, name: str, username: str) -> None:
     ctas = [
         f"💡 Create your own {resource_type} library on GitHub: uvx create-agent-resources-repo --github",
         "⭐ Star: github.com/kasperjunge/agent-resources-project",
-        f"📢 Share: uvx install-{resource_type} {username}/{name}",
+        f"📢 Share: uvx add-{resource_type} {username}/{name}",
     ]
     console.print(random.choice(ctas), style="dim")

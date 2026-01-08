@@ -8,6 +8,6 @@ CLI tools to install Claude Code resources (skills, commands, and sub-agents) fr
 pip install agent-resources
 ```
 
-This gives you all three commands: `install-skill`, `install-command`, `install-agent`.
+This gives you all three commands: `add-skill`, `add-command`, `add-agent`.
 
 See the [main README](https://github.com/kasperjunge/agent-resources) for full documentation.
