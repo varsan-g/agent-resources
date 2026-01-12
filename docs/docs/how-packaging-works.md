@@ -1,5 +1,8 @@
 # How Packaging Works
 
+!!! warning "Coming Soon"
+    This functionality is not yet implemented. See the [repository README](https://github.com/kasperjunge/agent-resources) for currently supported features.
+
 Agent Resources is designed to be the universal package manager and system for AI agents. This page explains the core concepts.
 
 ---

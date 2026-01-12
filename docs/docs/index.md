@@ -1,9 +1,12 @@
 ---
-title: Agent Resources - Package Manager for AI Coding Tools
+title: Get Started - Agent Resources
 description: Install and share skills, commands, and sub-agents for Claude Code, Cursor, Copilot, Codex, and OpenCode. The npm/pip for AI agents.
 ---
 
-# Agent Resources
+# Get Started
+
+!!! warning "Coming Soon"
+    This functionality is not yet implemented. See the [repository README](https://github.com/kasperjunge/agent-resources) for currently supported features.
 
 A package manager for AI coding tools.
 

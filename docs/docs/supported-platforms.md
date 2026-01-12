@@ -1,5 +1,8 @@
 # Supported Tools
 
+!!! warning "Coming Soon"
+    This functionality is not yet implemented. See the [repository README](https://github.com/kasperjunge/agent-resources) for currently supported features.
+
 Agent Resources can install packages to multiple AI coding tools. It automatically detects which tools you're using.
 
 ---

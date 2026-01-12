@@ -1,5 +1,8 @@
 # Install Agent Resources
 
+!!! warning "Coming Soon"
+    This functionality is not yet implemented. See the [repository README](https://github.com/kasperjunge/agent-resources) for currently supported features.
+
 There are several ways to install resources depending on what you need.
 
 ---

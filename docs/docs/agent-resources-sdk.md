@@ -1,9 +1,9 @@
 # Agent Resources SDK
 
-The Agent Resources SDK is a Python library for programmatically accessing skills, commands, and subagents from the Agent Resources hub.
+!!! warning "Coming Soon"
+    This functionality is not yet implemented. See the [repository README](https://github.com/kasperjunge/agent-resources) for currently supported features.
 
-!!! note "Coming Soon"
-    The SDK is currently in development. This page documents the planned API.
+The Agent Resources SDK is a Python library for programmatically accessing skills, commands, and subagents from the Agent Resources hub.
 
 ---
 

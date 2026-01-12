@@ -1,5 +1,8 @@
 # Create Your Own Repo
 
+!!! warning "Coming Soon"
+    This functionality is not yet implemented. See the [repository README](https://github.com/kasperjunge/agent-resources) for currently supported features.
+
 You can host skills, commands, and subagents in any public GitHub repository. This guide shows you how to set up a repo and install resources from it.
 
 ---
