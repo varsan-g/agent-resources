@@ -23,3 +23,9 @@ class ResourceExistsError(AgrError):
     """Raised when the resource already exists locally."""
 
     pass
+
+
+class BundleNotFoundError(AgrError):
+    """Raised when no bundle directory exists in any resource type."""
+
+    pass
