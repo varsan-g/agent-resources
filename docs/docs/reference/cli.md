@@ -47,6 +47,57 @@ agr add skill username/custom-repo/my-skill
 agr add skill username/backend:hello-world
 ```
 
+## agr update
+
+Re-fetch resources from GitHub to get the latest version.
+
+### Commands
+
+```bash
+agr update skill <reference>
+agr update command <reference>
+agr update agent <reference>
+```
+
+### Options
+
+- `--global`, `-g`: update in `~/.claude/` instead of the current directory
+
+### Examples
+
+```bash
+agr update skill kasperjunge/hello-world
+agr update command kasperjunge/my-repo/hello --global
+agr update agent kasperjunge/hello-agent
+```
+
+## agr remove
+
+Remove resources from the local installation.
+
+### Commands
+
+```bash
+agr remove skill <name>
+agr remove command <name>
+agr remove agent <name>
+```
+
+### Options
+
+- `--global`, `-g`: remove from `~/.claude/` instead of the current directory
+
+### Examples
+
+```bash
+agr remove skill hello-world
+agr remove command hello --global
+agr remove agent hello-agent
+```
+
+!!! warning
+    Resources are removed immediately without confirmation.
+
 ## agr init
 
 Create scaffolds for repositories and resources.
