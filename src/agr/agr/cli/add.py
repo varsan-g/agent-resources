@@ -1,32 +1,76 @@
 """Add subcommand for agr - install resources from GitHub."""
 
-from typing import Annotated
+from typing import Annotated, List, Optional
 
 import typer
+from rich.console import Console
 
-from agr.cli.common import handle_add_bundle, handle_add_resource
+from agr.cli.common import handle_add_bundle, handle_add_resource, handle_add_unified
 from agr.fetcher import ResourceType
+
+console = Console()
+
+# Deprecated subcommand names
+DEPRECATED_SUBCOMMANDS = {"skill", "command", "agent", "bundle"}
+
+
+def extract_type_from_args(
+    args: list[str] | None, explicit_type: str | None
+) -> tuple[list[str], str | None]:
+    """
+    Extract --type/-t option from args list if present.
+
+    When --type or -t appears after the resource reference, Typer captures it
+    as part of the variadic args list. This function extracts it.
+
+    Args:
+        args: The argument list (may contain --type/-t)
+        explicit_type: The resource_type value from Typer (may be None if type was in args)
+
+    Returns:
+        Tuple of (cleaned_args, resource_type)
+    """
+    if not args or explicit_type is not None:
+        return args or [], explicit_type
+
+    cleaned_args = []
+    resource_type = None
+    i = 0
+    while i < len(args):
+        if args[i] in ("--type", "-t") and i + 1 < len(args):
+            resource_type = args[i + 1]
+            i += 2  # Skip both --type and its value
+        else:
+            cleaned_args.append(args[i])
+            i += 1
+
+    return cleaned_args, resource_type
 
 app = typer.Typer(
     help="Add skills, commands, or agents from GitHub.",
-    no_args_is_help=True,
 )
 
 
-@app.command("skill")
-def add_skill(
-    skill_ref: Annotated[
-        str,
-        typer.Argument(
-            help="Skill reference: <username>/<skill-name> or <username>/<repo>/<skill-name>",
-            metavar="REFERENCE",
+@app.callback(invoke_without_command=True)
+def add_unified(
+    ctx: typer.Context,
+    args: Annotated[
+        Optional[List[str]],
+        typer.Argument(help="Resource reference and optional arguments"),
+    ] = None,
+    resource_type: Annotated[
+        Optional[str],
+        typer.Option(
+            "--type",
+            "-t",
+            help="Explicit resource type: skill, command, agent, or bundle",
         ),
-    ],
+    ] = None,
     overwrite: Annotated[
         bool,
         typer.Option(
             "--overwrite",
-            help="Overwrite existing skill if it exists.",
+            help="Overwrite existing resource if it exists.",
         ),
     ] = False,
     global_install: Annotated[
@@ -38,140 +82,51 @@ def add_skill(
         ),
     ] = False,
 ) -> None:
-    """Add a skill from a GitHub repository.
+    """Add a resource from a GitHub repository with auto-detection.
 
     REFERENCE format:
-      - username/skill-name: installs from github.com/username/agent-resources
-      - username/repo/skill-name: installs from github.com/username/repo
+      - username/name: installs from github.com/username/agent-resources
+      - username/repo/name: installs from github.com/username/repo
+
+    Auto-detects the resource type (skill, command, agent, or bundle).
+    Use --type to explicitly specify when a name exists in multiple types.
 
     Examples:
-      agr add skill kasperjunge/hello-world
-      agr add skill kasperjunge/my-repo/hello-world --global
+      agr add kasperjunge/hello-world
+      agr add kasperjunge/my-repo/hello-world --type skill
+      agr add kasperjunge/productivity --global
     """
-    handle_add_resource(skill_ref, ResourceType.SKILL, "skills", overwrite, global_install)
+    # Extract --type/-t from args if it was captured there (happens when type comes after ref)
+    cleaned_args, resource_type = extract_type_from_args(args, resource_type)
 
+    if not cleaned_args:
+        console.print(ctx.get_help())
+        raise typer.Exit(0)
 
-@app.command("command")
-def add_command(
-    command_ref: Annotated[
-        str,
-        typer.Argument(
-            help="Command reference: <username>/<command-name> or <username>/<repo>/<command-name>",
-            metavar="REFERENCE",
-        ),
-    ],
-    overwrite: Annotated[
-        bool,
-        typer.Option(
-            "--overwrite",
-            help="Overwrite existing command if it exists.",
-        ),
-    ] = False,
-    global_install: Annotated[
-        bool,
-        typer.Option(
-            "--global",
-            "-g",
-            help="Install to ~/.claude/ instead of ./.claude/",
-        ),
-    ] = False,
-) -> None:
-    """Add a slash command from a GitHub repository.
+    first_arg = cleaned_args[0]
 
-    REFERENCE format:
-      - username/command-name: installs from github.com/username/agent-resources
-      - username/repo/command-name: installs from github.com/username/repo
+    # Handle deprecated subcommand syntax: agr add skill <ref>
+    if first_arg in DEPRECATED_SUBCOMMANDS:
+        if len(cleaned_args) < 2:
+            console.print(f"[red]Error: Missing resource reference after '{first_arg}'.[/red]")
+            raise typer.Exit(1)
 
-    Examples:
-      agr add command kasperjunge/hello
-      agr add command kasperjunge/my-repo/hello --global
-    """
-    handle_add_resource(command_ref, ResourceType.COMMAND, "commands", overwrite, global_install)
+        resource_ref = cleaned_args[1]
+        console.print(
+            f"[yellow]Warning: 'agr add {first_arg}' is deprecated. "
+            f"Use 'agr add {resource_ref}' instead.[/yellow]"
+        )
 
+        if first_arg == "skill":
+            handle_add_resource(resource_ref, ResourceType.SKILL, "skills", overwrite, global_install)
+        elif first_arg == "command":
+            handle_add_resource(resource_ref, ResourceType.COMMAND, "commands", overwrite, global_install)
+        elif first_arg == "agent":
+            handle_add_resource(resource_ref, ResourceType.AGENT, "agents", overwrite, global_install)
+        elif first_arg == "bundle":
+            handle_add_bundle(resource_ref, overwrite, global_install)
+        return
 
-@app.command("agent")
-def add_agent(
-    agent_ref: Annotated[
-        str,
-        typer.Argument(
-            help="Agent reference: <username>/<agent-name> or <username>/<repo>/<agent-name>",
-            metavar="REFERENCE",
-        ),
-    ],
-    overwrite: Annotated[
-        bool,
-        typer.Option(
-            "--overwrite",
-            help="Overwrite existing agent if it exists.",
-        ),
-    ] = False,
-    global_install: Annotated[
-        bool,
-        typer.Option(
-            "--global",
-            "-g",
-            help="Install to ~/.claude/ instead of ./.claude/",
-        ),
-    ] = False,
-) -> None:
-    """Add a sub-agent from a GitHub repository.
-
-    REFERENCE format:
-      - username/agent-name: installs from github.com/username/agent-resources
-      - username/repo/agent-name: installs from github.com/username/repo
-
-    Examples:
-      agr add agent kasperjunge/hello-agent
-      agr add agent kasperjunge/my-repo/hello-agent --global
-    """
-    handle_add_resource(agent_ref, ResourceType.AGENT, "agents", overwrite, global_install)
-
-
-@app.command("bundle")
-def add_bundle(
-    bundle_ref: Annotated[
-        str,
-        typer.Argument(
-            help="Bundle reference: <username>/<bundle-name> or <username>/<repo>/<bundle-name>",
-            metavar="REFERENCE",
-        ),
-    ],
-    overwrite: Annotated[
-        bool,
-        typer.Option(
-            "--overwrite",
-            help="Overwrite existing resources if they exist.",
-        ),
-    ] = False,
-    global_install: Annotated[
-        bool,
-        typer.Option(
-            "--global",
-            "-g",
-            help="Install to ~/.claude/ instead of ./.claude/",
-        ),
-    ] = False,
-) -> None:
-    """Add a bundle of resources from a GitHub repository.
-
-    A bundle installs all skills, commands, and agents from a named directory.
-
-    REFERENCE format:
-      - username/bundle-name: installs from github.com/username/agent-resources
-      - username/repo/bundle-name: installs from github.com/username/repo
-
-    Bundle structure in source repo:
-      .claude/skills/{bundle-name}/*/SKILL.md     -> skills
-      .claude/commands/{bundle-name}/*.md         -> commands
-      .claude/agents/{bundle-name}/*.md           -> agents
-
-    Resources are installed with the bundle name as a prefix:
-      .claude/skills/{bundle-name}/{skill-name}/
-      .claude/commands/{bundle-name}/{command-name}.md
-      .claude/agents/{bundle-name}/{agent-name}.md
-
-    Examples:
-      agr add bundle kasperjunge/productivity
-      agr add bundle kasperjunge/my-repo/productivity --global
-    """
-    handle_add_bundle(bundle_ref, overwrite, global_install)
+    # Normal unified add: agr add <ref>
+    resource_ref = first_arg
+    handle_add_unified(resource_ref, resource_type, overwrite, global_install)
