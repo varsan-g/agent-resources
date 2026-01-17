@@ -9,7 +9,7 @@ You can run agr without installing it, or install it globally.
 ## Run without installing
 
 ```bash
-uvx agr add skill kasperjunge/hello-world
+uvx agr add kasperjunge/hello-world
 ```
 
 ## Install with pip

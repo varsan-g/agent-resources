@@ -4,7 +4,7 @@
 
 **Share and install Claude Code skills, commands, and agents with a single command.**
 
-*Like uv, but for Claude Code resources.*
+*A package and project manager for AI agents.*
 
 [![PyPI](https://img.shields.io/pypi/v/agr?color=blue)](https://pypi.org/project/agr/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
@@ -20,16 +20,16 @@
 No installation needed. Just run:
 
 ```bash
-uvx agr add skill kasperjunge/hello-world
+uvx agr add kasperjunge/hello-world
 ```
 
-**That's it.** The skill is now available in Claude Code.
+**That's it.** The skill is now available in Claude Code. The resource type (skill, command, agent, or bundle) is auto-detected.
 
 Or install permanently:
 
 ```bash
 pip install agr
-agr add skill kasperjunge/hello-world
+agr add kasperjunge/hello-world
 ```
 
 ---
@@ -37,10 +37,11 @@ agr add skill kasperjunge/hello-world
 ## Install Any Resource
 
 ```bash
-agr add skill <username>/<skill-name>       # Skills
-agr add command <username>/<command-name>   # Slash commands
-agr add agent <username>/<agent-name>       # subagents
+agr add <username>/<name>                # Auto-detects resource type
+agr add <username>/<name> --type skill   # Explicit type (if needed)
 ```
+
+The resource type (skill, command, agent, or bundle) is auto-detected. Use `--type` to disambiguate if the same name exists in multiple types.
 
 ### Default Repository Convention
 
@@ -48,7 +49,7 @@ If you name your repo `agent-resources`, users only need to specify your usernam
 
 ```bash
 # Installs from github.com/kasperjunge/agent-resources
-agr add skill kasperjunge/hello-world
+agr add kasperjunge/hello-world
 ```
 
 ### Install From Any Repository
@@ -57,7 +58,7 @@ You can install from any GitHub repository that has the `.claude/` structure. Ju
 
 ```bash
 # Installs from github.com/username/custom-repo
-agr add skill username/custom-repo/my-skill
+agr add username/custom-repo/my-skill
 ```
 
 ### Install a Bundle
@@ -65,10 +66,24 @@ agr add skill username/custom-repo/my-skill
 Install multiple resources at once with bundles:
 
 ```bash
-agr add bundle kasperjunge/anthropic
+agr add kasperjunge/anthropic
 ```
 
 This installs all skills, commands, and agents from the bundle in one command.
+
+---
+
+## Run Without Installing (agrx)
+
+Try a skill or command without permanent installation:
+
+```bash
+agrx kasperjunge/hello-world              # Auto-detects and runs
+agrx kasperjunge/hello-world "my prompt"  # Run with a prompt
+agrx kasperjunge/hello-world -i           # Interactive mode
+```
+
+The resource is downloaded, executed, and cleaned up automatically.
 
 ---
 
@@ -91,7 +106,7 @@ agr init repo --github
 - Instant shareability:
 
 ```bash
-agr add skill <your-username>/hello-world
+agr add <your-username>/hello-world
 ```
 
 ### Add Your Own Resources
@@ -117,9 +132,9 @@ Push to GitHub.
 A comprehensive Claude Code toolkit for Go developers.
 
 ```bash
-agr add skill dsjacobsen/golang-pro      # Expert Go knowledge
-agr add agent dsjacobsen/go-reviewer     # Code review agent
-agr add command dsjacobsen/go-check      # Quick code check
+agr add dsjacobsen/golang-pro      # Expert Go knowledge
+agr add dsjacobsen/go-reviewer     # Code review agent
+agr add dsjacobsen/go-check        # Quick code check
 ```
 
 **Includes**: 1 skill, 9 agents, 11 commands covering scaffolding, testing, API building, refactoring, and more.
@@ -129,11 +144,11 @@ agr add command dsjacobsen/go-check      # Quick code check
 A comprehensive Claude Code toolkit for Drupal developers.
 
 ```bash
-agr add skill madsnorgaard/drupal-expert      # Drupal 10/11 modules, themes, hooks
-agr add skill madsnorgaard/drupal-migration   # D7-to-D10 migrations, CSV imports
-agr add skill madsnorgaard/ddev-expert        # DDEV local development, Xdebug
-agr add agent madsnorgaard/drupal-reviewer    # Code review agent
-agr add command madsnorgaard/drush-check      # Run health checks
+agr add madsnorgaard/drupal-expert      # Drupal 10/11 modules, themes, hooks
+agr add madsnorgaard/drupal-migration   # D7-to-D10 migrations, CSV imports
+agr add madsnorgaard/ddev-expert        # DDEV local development, Xdebug
+agr add madsnorgaard/drupal-reviewer    # Code review agent
+agr add madsnorgaard/drush-check        # Run health checks
 ```
 
 **Includes**: 4 skills, 1 agent, 5 commands covering Drupal development, migrations, DDEV, Docker, security audits, and more.
@@ -146,7 +161,32 @@ agr add command madsnorgaard/drush-check      # Run health checks
 
 ## Legacy Commands
 
-The following commands are deprecated but still supported for backwards compatibility:
+The following syntax is deprecated but still supported for backwards compatibility:
+
+```bash
+# Old subcommand syntax (deprecated)
+agr add skill <username>/<name>
+agr add command <username>/<name>
+agr add agent <username>/<name>
+agr add bundle <username>/<name>
+
+agr remove skill <name>
+agr remove command <name>
+agr remove agent <name>
+
+agrx skill <username>/<name>
+agrx command <username>/<name>
+```
+
+Use the unified syntax instead:
+
+```bash
+agr add <username>/<name>
+agr remove <name>
+agrx <username>/<name>
+```
+
+Even older standalone commands are also deprecated:
 
 ```bash
 uvx add-skill <username>/<skill-name>
@@ -154,8 +194,6 @@ uvx add-command <username>/<command-name>
 uvx add-agent <username>/<agent-name>
 uvx create-agent-resources-repo
 ```
-
-Use `agr add` and `agr init` instead.
 
 ---
 

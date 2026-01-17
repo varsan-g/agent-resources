@@ -20,15 +20,17 @@ single command.
 No install required:
 
 ```bash
-uvx agr add skill kasperjunge/hello-world
+uvx agr add kasperjunge/hello-world
 ```
 
 Install permanently:
 
 ```bash
 pip install agr
-agr add skill kasperjunge/hello-world
+agr add kasperjunge/hello-world
 ```
+
+The resource type (skill, command, agent, or bundle) is auto-detected.
 
 ## What agr installs
 

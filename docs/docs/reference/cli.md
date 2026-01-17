@@ -12,60 +12,51 @@ agr --help
 
 ## agr add
 
-Add resources from GitHub.
+Add resources from GitHub with auto-detection.
 
-### Commands
+### Syntax
 
 ```bash
-agr add skill <username>/<name>
-agr add command <username>/<name>
-agr add agent <username>/<name>
+agr add <username>/<name>
+agr add <username>/<repo>/<name>
 ```
+
+The resource type (skill, command, agent, or bundle) is automatically detected.
 
 ### Options
 
-- `--global`, `-g`: install to `~/.claude/` instead of the current directory
-- `--overwrite`: replace an existing resource
+- `--type`, `-t`: Explicit resource type (`skill`, `command`, `agent`, `bundle`)
+- `--global`, `-g`: Install to `~/.claude/` instead of the current directory
+- `--overwrite`: Replace an existing resource
 
 ### Examples
 
 ```bash
-agr add skill kasperjunge/hello-world
-agr add command acme/tools/review --global
-agr add agent acme/agents/test-writer --overwrite
+# Auto-detect resource type
+agr add kasperjunge/hello-world
+
+# From a custom repository
+agr add acme/tools/review --global
+
+# With explicit type (for disambiguation)
+agr add kasperjunge/hello --type skill
+
+# Nested paths
+agr add username/backend:hello-world
+
+# Bundles (auto-detected)
+agr add kasperjunge/anthropic
 ```
 
-### Custom repo name
+### Disambiguation
 
-```bash
-agr add skill username/custom-repo/my-skill
+If the same name exists in multiple resource types, `agr add` will prompt you to use `--type`:
+
 ```
-
-### Nested paths
-
-```bash
-agr add skill username/backend:hello-world
-```
-
-### Bundles
-
-Install all resources from a bundle (a named collection of skills, commands, and agents):
-
-```bash
-agr add bundle <username>/<bundle-name>
-agr add bundle <username>/<repo>/<bundle-name>
-```
-
-Options:
-
-- `--global`, `-g`: install to `~/.claude/` instead of the current directory
-- `--overwrite`: replace existing resources
-
-Examples:
-
-```bash
-agr add bundle kasperjunge/anthropic
-agr add bundle kasperjunge/my-repo/productivity --global
+Error: Resource 'hello' found in multiple types: skill, command.
+Use --type to specify which one to install:
+  agr add kasperjunge/hello --type skill
+  agr add kasperjunge/hello --type command
 ```
 
 ## agr update
@@ -78,11 +69,12 @@ Re-fetch resources from GitHub to get the latest version.
 agr update skill <reference>
 agr update command <reference>
 agr update agent <reference>
+agr update bundle <reference>
 ```
 
 ### Options
 
-- `--global`, `-g`: update in `~/.claude/` instead of the current directory
+- `--global`, `-g`: Update in `~/.claude/` instead of the current directory
 
 ### Examples
 
@@ -90,69 +82,105 @@ agr update agent <reference>
 agr update skill kasperjunge/hello-world
 agr update command kasperjunge/my-repo/hello --global
 agr update agent kasperjunge/hello-agent
-```
-
-### Bundles
-
-```bash
-agr update bundle <username>/<bundle-name>
-agr update bundle <username>/<repo>/<bundle-name>
-```
-
-Options:
-
-- `--global`, `-g`: update in `~/.claude/` instead of the current directory
-
-Examples:
-
-```bash
 agr update bundle kasperjunge/anthropic
-agr update bundle kasperjunge/my-repo/productivity --global
 ```
 
 ## agr remove
 
-Remove resources from the local installation.
+Remove resources from the local installation with auto-detection.
 
-### Commands
+### Syntax
 
 ```bash
-agr remove skill <name>
-agr remove command <name>
-agr remove agent <name>
+agr remove <name>
 ```
+
+Auto-detects the resource type from installed files.
 
 ### Options
 
-- `--global`, `-g`: remove from `~/.claude/` instead of the current directory
+- `--type`, `-t`: Explicit resource type (`skill`, `command`, `agent`, `bundle`)
+- `--global`, `-g`: Remove from `~/.claude/` instead of the current directory
 
 ### Examples
 
 ```bash
-agr remove skill hello-world
-agr remove command hello --global
-agr remove agent hello-agent
+# Auto-detect resource type
+agr remove hello-world
+
+# With explicit type (for disambiguation)
+agr remove hello --type skill
+
+# Remove from global installation
+agr remove hello-world --global
+
+# Remove a bundle
+agr remove anthropic --type bundle
 ```
 
-### Bundles
+### Disambiguation
 
-```bash
-agr remove bundle <bundle-name>
+If the same name exists in multiple resource types, `agr remove` will prompt you to use `--type`:
+
 ```
-
-Options:
-
-- `--global`, `-g`: remove from `~/.claude/` instead of the current directory
-
-Examples:
-
-```bash
-agr remove bundle anthropic
-agr remove bundle productivity --global
+Error: Resource 'hello' found in multiple types: skill, command.
+Use --type to specify which one to remove:
+  agr remove hello --type skill
+  agr remove hello --type command
 ```
 
 !!! warning
     Resources are removed immediately without confirmation.
+
+## agrx
+
+Run skills and commands temporarily without permanent installation.
+
+### Syntax
+
+```bash
+agrx <username>/<name>
+agrx <username>/<name> "<prompt>"
+agrx <username>/<repo>/<name>
+```
+
+The resource type (skill or command) is automatically detected. The resource is downloaded, executed, and cleaned up afterwards.
+
+### Options
+
+- `--type`, `-t`: Explicit resource type (`skill` or `command`)
+- `--interactive`, `-i`: Start an interactive Claude session
+- `--global`, `-g`: Install temporarily to `~/.claude/` instead of `./.claude/`
+
+### Examples
+
+```bash
+# Auto-detect and run
+agrx kasperjunge/hello-world
+
+# Run with a prompt
+agrx kasperjunge/hello-world "analyze this code"
+
+# Interactive mode
+agrx kasperjunge/hello-world -i
+
+# With explicit type
+agrx kasperjunge/hello --type skill
+
+# From a custom repository
+agrx acme/tools/review
+```
+
+### Disambiguation
+
+If the same name exists as both a skill and a command, `agrx` will prompt you to use `--type`:
+
+```
+Error: Resource 'hello' found in multiple types: skill, command.
+Use --type to specify which one to run:
+  agrx kasperjunge/hello --type skill
+  agrx kasperjunge/hello --type command
+```
 
 ## agr init
 
@@ -168,8 +196,8 @@ agr init repo .
 
 Options:
 
-- `--path`, `-p`: custom output path
-- `--github`, `-g`: create a GitHub repo and push (requires `gh`)
+- `--path`, `-p`: Custom output path
+- `--github`, `-g`: Create a GitHub repo and push (requires `gh`)
 
 ### Create a skill
 
@@ -179,7 +207,7 @@ agr init skill my-skill
 
 Options:
 
-- `--path`, `-p`: custom output path
+- `--path`, `-p`: Custom output path
 
 ### Create a command
 
@@ -189,7 +217,7 @@ agr init command my-command
 
 Options:
 
-- `--path`, `-p`: custom output path
+- `--path`, `-p`: Custom output path
 
 ### Create an agent
 
@@ -199,4 +227,29 @@ agr init agent my-agent
 
 Options:
 
-- `--path`, `-p`: custom output path
+- `--path`, `-p`: Custom output path
+
+## Deprecated syntax
+
+The old subcommand syntax is deprecated but still works:
+
+```bash
+# Deprecated (shows warning)
+agr add skill <username>/<name>
+agr add command <username>/<name>
+agr add agent <username>/<name>
+agr add bundle <username>/<name>
+
+agr remove skill <name>
+agr remove command <name>
+agr remove agent <name>
+agr remove bundle <name>
+
+agrx skill <username>/<name>
+agrx command <username>/<name>
+
+# Use instead
+agr add <username>/<name>
+agr remove <name>
+agrx <username>/<name>
+```

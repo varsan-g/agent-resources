@@ -6,37 +6,23 @@ title: First steps
 
 This page gets you from zero to a working resource.
 
-## Install a skill
+## Install a resource
 
 ```bash
-agr add skill kasperjunge/hello-world
+agr add kasperjunge/hello-world
 ```
 
-This installs the skill into:
+The resource type (skill, command, agent, or bundle) is auto-detected. This installs the resource into the appropriate directory:
 
 ```
 ./
 └── .claude/
-    └── skills/
-        └── hello-world/
-```
-
-## Install a command or agent
-
-```bash
-agr add command kasperjunge/hello-world
-agr add agent kasperjunge/hello-world
-```
-
-Commands install into:
-
-```
-./
-└── .claude/
+    ├── skills/
+    │   └── hello-world/       # if it's a skill
     ├── commands/
-    │   └── hello-world.md
+    │   └── hello-world.md     # if it's a command
     └── agents/
-        └── hello-world.md
+        └── hello-world.md     # if it's an agent
 ```
 
 ## Use your resource
@@ -48,11 +34,33 @@ inside Claude Code. No additional configuration is required.
 
 ```bash
 # Install globally instead of in the current repo
-agr add skill kasperjunge/hello-world --global
+agr add kasperjunge/hello-world --global
 
 # Overwrite an existing resource
-agr add skill kasperjunge/hello-world --overwrite
+agr add kasperjunge/hello-world --overwrite
+
+# Specify type explicitly (if a name exists in multiple types)
+agr add kasperjunge/hello-world --type skill
 ```
+
+## Run without installing (agrx)
+
+Try a resource without permanent installation:
+
+```bash
+agrx kasperjunge/hello-world              # Auto-detects and runs
+agrx kasperjunge/hello-world "my prompt"  # Run with a prompt
+```
+
+The resource is downloaded, executed, and cleaned up automatically.
+
+## Remove a resource
+
+```bash
+agr remove hello-world
+```
+
+Auto-detects the resource type. Use `--type` to disambiguate if needed.
 
 ## Next steps
 

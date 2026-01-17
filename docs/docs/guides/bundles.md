@@ -9,21 +9,29 @@ A bundle is a named collection of skills, commands, and agents that can be insta
 ## Installing a bundle
 
 ```bash
-agr add bundle <username>/<bundle-name>
+agr add <username>/<bundle-name>
 ```
 
 For example:
 
 ```bash
-agr add bundle kasperjunge/anthropic
+agr add kasperjunge/anthropic
 ```
 
-This installs all skills, commands, and agents from the `anthropic` bundle.
+This installs all skills, commands, and agents from the `anthropic` bundle. The bundle type is auto-detected.
 
 ### From a custom repository
 
 ```bash
-agr add bundle <username>/<repo>/<bundle-name>
+agr add <username>/<repo>/<bundle-name>
+```
+
+### Explicit type
+
+If a bundle name conflicts with another resource type, use `--type`:
+
+```bash
+agr add kasperjunge/anthropic --type bundle
 ```
 
 ### Options
@@ -44,7 +52,7 @@ agr update bundle kasperjunge/anthropic
 Remove all resources from a bundle:
 
 ```bash
-agr remove bundle anthropic
+agr remove anthropic --type bundle
 ```
 
 ## Creating a bundle
