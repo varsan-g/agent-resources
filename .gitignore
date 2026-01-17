@@ -58,3 +58,6 @@ package-lock.json
 docs/site/
 docs/.cache/
 .documents/
+
+# Release messages output
+.releases/
