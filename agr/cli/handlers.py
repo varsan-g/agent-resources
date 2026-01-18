@@ -68,6 +68,8 @@ def print_success_message(
         source_indicator = " [dim](via agr.toml)[/dim]"
     elif source == ResourceSource.CLAUDE_DIR:
         source_indicator = " [dim](via .claude/)[/dim]"
+    elif source == ResourceSource.REPO_ROOT:
+        source_indicator = " [dim](auto-discovered)[/dim]"
 
     console.print(f"[green]Added {resource_type} '{name}'[/green]{source_indicator}")
 
@@ -587,8 +589,8 @@ def handle_add_unified(
                 # First, check agr.toml for resource definition
                 resolved = resolve_remote_resource(repo_dir, name)
 
-                if resolved and resolved.source == ResourceSource.AGR_TOML:
-                    # Resource found in agr.toml - use explicit path
+                if resolved and resolved.source in (ResourceSource.AGR_TOML, ResourceSource.REPO_ROOT):
+                    # Resource found in agr.toml or auto-discovered in repo - use explicit path
                     dest_base = get_base_path(global_install)
 
                     if resolved.is_package:

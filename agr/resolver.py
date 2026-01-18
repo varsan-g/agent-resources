@@ -3,6 +3,7 @@
 This module handles the resolution order for remote resources:
 1. Check agr.toml dependencies array for entries with "path" key
 2. Fallback to .claude/{type}/{name}
+3. Auto-discover recognizable resources anywhere in repo (skills, commands, agents)
 """
 
 from dataclasses import dataclass
@@ -20,6 +21,7 @@ class ResourceSource(Enum):
 
     AGR_TOML = "agr_toml"  # Explicitly defined in agr.toml
     CLAUDE_DIR = "claude_dir"  # Found in .claude/ directory
+    REPO_ROOT = "repo_root"  # Auto-discovered anywhere in repo
 
 
 @dataclass
@@ -308,12 +310,108 @@ def _resolve_from_claude_dir(repo_dir: Path, name: str) -> ResolvedResource | No
     return None
 
 
+def _resolve_from_repo_root(repo_dir: Path, name: str) -> ResolvedResource | None:
+    """Auto-discover resource anywhere in repo (third fallback).
+
+    The `name` may contain colons for nested paths (e.g., "tools:git").
+    These get converted to directory paths for searching.
+
+    Uses directory-based detection:
+    - Skills: {path_segments}/SKILL.md (directory with SKILL.md)
+    - Commands: **/commands/{path_segments}.md
+    - Agents: **/agents/{path_segments}.md
+
+    Note: Packages are NOT auto-discovered; they must be declared in agr.toml.
+
+    Args:
+        repo_dir: Path to repository root
+        name: Resource name (may contain colons for nested paths)
+
+    Returns:
+        ResolvedResource if found, None otherwise
+    """
+    # Convert colon-separated name to path segments
+    # e.g., "tools:git" -> ["tools", "git"]
+    path_segments = name.split(":") if ":" in name else [name]
+    simple_name = path_segments[-1]  # Last segment is the actual resource name
+
+    # Build the relative path from segments
+    # For skills: tools/git/SKILL.md
+    # For commands/agents: commands/tools/git.md or agents/tools/git.md
+    nested_path = Path(*path_segments)
+
+    # 1. Check for skill at exact path: {nested_path}/SKILL.md
+    skill_path = repo_dir / nested_path
+    if skill_path.is_dir() and (skill_path / "SKILL.md").exists():
+        return ResolvedResource(
+            name=name,
+            resource_type=ResourceType.SKILL,
+            path=nested_path,
+            source=ResourceSource.REPO_ROOT,
+        )
+
+    # 2. Search for skill anywhere in repo: **/{nested_path}/SKILL.md
+    # Use rglob to find the pattern anywhere
+    search_pattern = str(nested_path / "SKILL.md")
+    for skill_md in repo_dir.rglob(search_pattern):
+        # Skip .claude/ directory (already handled in fallback 2)
+        rel_path = skill_md.parent.relative_to(repo_dir)
+        if str(rel_path).startswith(".claude"):
+            continue
+        return ResolvedResource(
+            name=name,
+            resource_type=ResourceType.SKILL,
+            path=rel_path,
+            source=ResourceSource.REPO_ROOT,
+        )
+
+    # 3. Check for command in commands/ directory
+    # Build path: commands/{path_segments[:-1]}/{simple_name}.md
+    if len(path_segments) > 1:
+        cmd_rel_path = Path("commands", *path_segments[:-1], f"{simple_name}.md")
+    else:
+        cmd_rel_path = Path("commands", f"{simple_name}.md")
+
+    for cmd_path in repo_dir.rglob(str(cmd_rel_path)):
+        rel_path = cmd_path.relative_to(repo_dir)
+        # Skip .claude/ directory
+        if str(rel_path).startswith(".claude"):
+            continue
+        return ResolvedResource(
+            name=name,
+            resource_type=ResourceType.COMMAND,
+            path=rel_path,
+            source=ResourceSource.REPO_ROOT,
+        )
+
+    # 4. Check for agent in agents/ directory
+    if len(path_segments) > 1:
+        agent_rel_path = Path("agents", *path_segments[:-1], f"{simple_name}.md")
+    else:
+        agent_rel_path = Path("agents", f"{simple_name}.md")
+
+    for agent_path in repo_dir.rglob(str(agent_rel_path)):
+        rel_path = agent_path.relative_to(repo_dir)
+        # Skip .claude/ directory
+        if str(rel_path).startswith(".claude"):
+            continue
+        return ResolvedResource(
+            name=name,
+            resource_type=ResourceType.AGENT,
+            path=rel_path,
+            source=ResourceSource.REPO_ROOT,
+        )
+
+    return None
+
+
 def resolve_remote_resource(repo_dir: Path, name: str) -> ResolvedResource | None:
     """Resolve a resource reference in a remote repository.
 
     Resolution order:
     1. Check agr.toml for [resource.{name}] or [package.{name}]
     2. Fallback to .claude/{type}/{name}
+    3. Auto-discover anywhere in repo (skills, commands, agents)
 
     Args:
         repo_dir: Path to extracted repository
@@ -328,5 +426,10 @@ def resolve_remote_resource(repo_dir: Path, name: str) -> ResolvedResource | Non
     if resolved:
         return resolved
 
-    # Fallback to .claude/ directory
-    return _resolve_from_claude_dir(repo_dir, name)
+    # Second, fallback to .claude/ directory
+    resolved = _resolve_from_claude_dir(repo_dir, name)
+    if resolved:
+        return resolved
+
+    # Third, auto-discover anywhere in repo
+    return _resolve_from_repo_root(repo_dir, name)
