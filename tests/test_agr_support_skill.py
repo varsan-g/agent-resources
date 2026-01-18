@@ -6,8 +6,8 @@ import yaml
 
 
 # Get the path to the agr-support skill
-# Path: tests -> agr -> src -> agent-resources (4 levels up)
-SKILL_PATH = Path(__file__).parent.parent.parent.parent / "skills" / "agr-support"
+# Path: tests -> agent-resources (1 level up) -> resources/skills/agr-support
+SKILL_PATH = Path(__file__).parent.parent / "resources" / "skills" / "agr-support"
 
 
 class TestSkillStructure:
