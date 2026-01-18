@@ -34,6 +34,7 @@ from agr.fetcher import (
     fetch_resource_from_repo_dir,
     remove_bundle,
 )
+from agr.resolver import resolve_remote_resource, ResourceSource
 
 console = Console()
 
@@ -174,9 +175,29 @@ def fetch_spinner():
         yield
 
 
-def print_success_message(resource_type: str, name: str, username: str, repo: str) -> None:
-    """Print branded success message with rotating CTA."""
-    console.print(f"[green]Added {resource_type} '{name}'[/green]")
+def print_success_message(
+    resource_type: str,
+    name: str,
+    username: str,
+    repo: str,
+    source: ResourceSource | None = None,
+) -> None:
+    """Print branded success message with rotating CTA.
+
+    Args:
+        resource_type: Type of resource (skill, command, agent)
+        name: Resource name
+        username: GitHub username
+        repo: Repository name
+        source: Where the resource was resolved from (for showing source indicator)
+    """
+    source_indicator = ""
+    if source == ResourceSource.AGR_TOML:
+        source_indicator = " [dim](via agr.toml)[/dim]"
+    elif source == ResourceSource.CLAUDE_DIR:
+        source_indicator = " [dim](via .claude/)[/dim]"
+
+    console.print(f"[green]Added {resource_type} '{name}'[/green]{source_indicator}")
 
     # Build share reference based on whether custom repo was used
     if repo == DEFAULT_REPO_NAME:
@@ -824,12 +845,46 @@ def handle_add_unified(
     try:
         with fetch_spinner():
             with downloaded_repo(username, repo_name) as repo_dir:
+                # First, check agr.toml for resource definition
+                resolved = resolve_remote_resource(repo_dir, name)
+
+                if resolved and resolved.source == ResourceSource.AGR_TOML:
+                    # Resource found in agr.toml - use explicit path
+                    dest_base = get_base_path(global_install)
+
+                    if resolved.is_package:
+                        # Package handling
+                        bundle_name = path_segments[-1] if path_segments else name
+                        result = fetch_bundle_from_repo_dir(repo_dir, bundle_name, dest_base, overwrite)
+                        print_bundle_success_message(bundle_name, result, username, repo_name)
+                    elif resolved.resource_type:
+                        res_config = RESOURCE_CONFIGS[resolved.resource_type]
+                        dest = dest_base / res_config.dest_subdir
+                        fetch_resource_from_repo_dir(
+                            repo_dir, name, path_segments, dest, resolved.resource_type, overwrite,
+                            username=username,
+                            source_path=resolved.path,
+                        )
+                        print_success_message(
+                            resolved.resource_type.value, name, username, repo_name,
+                            source=resolved.source,
+                        )
+                        _add_to_agr_toml(dep_ref, resolved.resource_type, global_install)
+                    else:
+                        typer.echo(
+                            f"Error: Resource '{name}' found in agr.toml but has no type.",
+                            err=True,
+                        )
+                        raise typer.Exit(1)
+                    return
+
+                # Fallback: check .claude/ directory (existing behavior)
                 discovery = discover_resource_type_from_dir(repo_dir, name, path_segments)
 
                 if discovery.is_empty:
                     typer.echo(
                         f"Error: Resource '{name}' not found in {username}/{repo_name}.\n"
-                        f"Searched in: skills, commands, agents, bundles.",
+                        f"Searched in: agr.toml, skills, commands, agents, bundles.",
                         err=True,
                     )
                     raise typer.Exit(1)
@@ -845,7 +900,7 @@ def handle_add_unified(
                         f"Use --type to specify which one to install:\n{examples}"
                     )
 
-                # Install the unique resource
+                # Install the unique resource from .claude/
                 dest_base = get_base_path(global_install)
 
                 if discovery.is_bundle:
@@ -862,7 +917,10 @@ def handle_add_unified(
                         repo_dir, name, path_segments, dest, resource.resource_type, overwrite,
                         username=username,
                     )
-                    print_success_message(resource.resource_type.value, name, username, repo_name)
+                    print_success_message(
+                        resource.resource_type.value, name, username, repo_name,
+                        source=ResourceSource.CLAUDE_DIR,
+                    )
                     # Add to agr.toml
                     _add_to_agr_toml(dep_ref, resource.resource_type, global_install)
 

@@ -268,6 +268,7 @@ def fetch_resource_from_repo_dir(
     resource_type: ResourceType,
     overwrite: bool = False,
     username: str | None = None,
+    source_path: Path | None = None,
 ) -> Path:
     """
     Fetch a resource from an already-downloaded repo directory.
@@ -284,6 +285,9 @@ def fetch_resource_from_repo_dir(
         username: GitHub username for namespaced installation (e.g., "kasperjunge")
                   When provided, installs to dest/<flattened_name>/ for skills,
                   or dest/username/name/ for commands/agents.
+        source_path: Explicit source path (relative to repo root) from resolver.
+                     If provided, uses this instead of building from path_segments.
+                     This is used when the resource location is specified in agr.toml.
 
     Returns:
         Path to the installed resource
@@ -315,15 +319,22 @@ def fetch_resource_from_repo_dir(
             f"Use --overwrite to replace it."
         )
 
-    source_base = repo_dir / config.source_subdir
-    resource_source = _build_resource_path(source_base, config, path_segments)
+    # Determine source path: use explicit source_path if provided, else build from path_segments
+    if source_path:
+        resource_source = repo_dir / source_path
+    else:
+        source_base = repo_dir / config.source_subdir
+        resource_source = _build_resource_path(source_base, config, path_segments)
 
     if not resource_source.exists():
-        nested_path = "/".join(path_segments)
-        if config.is_directory:
-            expected_location = f"{config.source_subdir}/{nested_path}/"
+        if source_path:
+            expected_location = str(source_path)
         else:
-            expected_location = f"{config.source_subdir}/{nested_path}{config.file_extension}"
+            nested_path = "/".join(path_segments)
+            if config.is_directory:
+                expected_location = f"{config.source_subdir}/{nested_path}/"
+            else:
+                expected_location = f"{config.source_subdir}/{nested_path}{config.file_extension}"
         raise ResourceNotFoundError(
             f"{resource_type.value.capitalize()} '{name}' not found.\n"
             f"Expected location: {expected_location}"

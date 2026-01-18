@@ -1,7 +1,7 @@
 """Remote resource resolution for agr add operations.
 
 This module handles the resolution order for remote resources:
-1. Check agr.toml for [resource.*] or [package.*] sections
+1. Check agr.toml dependencies array for entries with "path" key
 2. Fallback to .claude/{type}/{name}
 """
 
@@ -41,11 +41,56 @@ class ResolvedResource:
     is_package: bool = False
 
 
-def parse_remote_agr_toml(repo_dir: Path) -> dict[str, dict]:
-    """Parse agr.toml from a remote repository for resource/package definitions.
+def _extract_resource_name(path_str: str) -> str:
+    """Extract resource name from a path.
 
-    Looks for [resource.*] and [package.*] sections that define
-    where resources are located for publishing.
+    Examples:
+        "resources/commands/hello-world.md" -> "hello-world"
+        "resources/skills/commit" -> "commit"
+        "resources/packages/python-dev" -> "python-dev"
+        "resources/skills/product-strategy/growth-hacker" -> "product-strategy:growth-hacker"
+
+    For nested paths (more than one segment after the type dir),
+    joins with colons to create colon-delimited names.
+
+    Args:
+        path_str: Path string from agr.toml dependencies
+
+    Returns:
+        Resource name (with colons for nested paths)
+    """
+    p = Path(path_str)
+
+    # Remove .md extension if present
+    if p.suffix == ".md":
+        p = p.with_suffix("")
+
+    # Get path parts after "resources/{type}/"
+    parts = p.parts
+
+    # Find the index after "resources" and the type directory
+    # e.g., ("resources", "skills", "product-strategy", "growth-hacker")
+    #        -> ["product-strategy", "growth-hacker"]
+    if len(parts) >= 3 and parts[0] == "resources":
+        # Skip "resources" and the type directory (skills/commands/agents/packages)
+        name_parts = parts[2:]
+    elif len(parts) >= 2:
+        # Fallback: just use last segments
+        name_parts = parts[1:]
+    else:
+        # Single segment, just use the name
+        name_parts = (p.name,)
+
+    # Join with colons for nested paths
+    return ":".join(name_parts)
+
+
+def parse_remote_agr_toml(repo_dir: Path) -> dict[str, dict]:
+    """Parse agr.toml dependencies for resources available for remote install.
+
+    Reads the dependencies array and extracts entries with "path" key,
+    which represent local resources that can be installed remotely.
+    Entries with "handle" key are remote dependencies and are skipped.
 
     Args:
         repo_dir: Path to extracted repository
@@ -53,8 +98,9 @@ def parse_remote_agr_toml(repo_dir: Path) -> dict[str, dict]:
     Returns:
         Dict mapping resource names to their config:
         {
-            "my-skill": {"path": "skills/my-skill", "type": "skill"},
-            "my-toolkit": {"path": "packages/my-toolkit", "package": True}
+            "hello-world": {"path": "resources/commands/hello-world.md", "type": "command"},
+            "commit": {"path": "resources/skills/commit", "type": "skill"},
+            "product-strategy:growth-hacker": {"path": "resources/skills/product-strategy/growth-hacker", "type": "skill"},
         }
     """
     agr_toml_path = repo_dir / "agr.toml"
@@ -68,24 +114,33 @@ def parse_remote_agr_toml(repo_dir: Path) -> dict[str, dict]:
     except TOMLKitError:
         return {}
 
+    dependencies = doc.get("dependencies", [])
+    if not isinstance(dependencies, list):
+        return {}
+
     result = {}
 
-    # Parse [resource.*] sections - tomlkit parses dotted keys as nested dicts
-    # [resource.my-skill] becomes {"resource": {"my-skill": {...}}}
-    resource_section = doc.get("resource", {})
-    if isinstance(resource_section, dict):
-        for resource_name, value in resource_section.items():
-            if isinstance(value, dict):
-                result[resource_name] = dict(value)
+    for dep in dependencies:
+        if not isinstance(dep, dict):
+            continue
 
-    # Parse [package.*] sections
-    package_section = doc.get("package", {})
-    if isinstance(package_section, dict):
-        for package_name, value in package_section.items():
-            if isinstance(value, dict):
-                config = dict(value)
-                config["package"] = True
-                result[package_name] = config
+        # Only entries with "path" are local resources (available for install)
+        # Entries with "handle" are remote dependencies (skip)
+        if "path" not in dep or "handle" in dep:
+            continue
+
+        path_str = dep["path"]
+        resource_type = dep.get("type")
+        is_package = resource_type == "package"
+
+        # Extract name from path
+        name = _extract_resource_name(path_str)
+
+        result[name] = {
+            "path": path_str,
+            "type": resource_type,
+            "package": is_package,
+        }
 
     return result
 
