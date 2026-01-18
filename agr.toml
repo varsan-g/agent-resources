@@ -17,4 +17,5 @@ dependencies = [
     {path = "resources/skills/product-strategy/ost", type = "skill"},
     {path = "resources/skills/anthropic/skill-creator", type = "skill"},
     {path = "resources/skills/anthropic/frontend-design", type = "skill"},
+    {path = "./resources/packages/python-dev", type = "package"},
 ]
