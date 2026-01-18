@@ -10,6 +10,7 @@ from rich.table import Table
 from agr.config import AgrConfig, Dependency, find_config
 from agr.cli.common import TYPE_TO_SUBDIR, console, find_repo_root, get_base_path
 from agr.github import get_username_from_git_remote
+from agr.utils import compute_flattened_skill_name, compute_path_segments_from_skill_path
 
 app = typer.Typer(
     help="List installed dependencies from agr.toml.",
@@ -23,12 +24,17 @@ def _is_installed(dep: Dependency, base_path: Path, username: str) -> bool:
     if dep.is_local and dep.path:
         # Local dependency - check if installed
         source_path = Path(dep.path)
-        name = source_path.stem if source_path.is_file() else source_path.name
 
         if dep.type in ("skill", "package"):
-            installed_path = base_path / subdir / username / name
+            # Skills use flattened colon-namespaced directory names
+            # e.g., .claude/skills/kasperjunge:commit/
+            path_segments = compute_path_segments_from_skill_path(source_path)
+            flattened_name = compute_flattened_skill_name(username, path_segments)
+            installed_path = base_path / subdir / flattened_name
             return installed_path.is_dir()
         else:
+            # Commands/agents use nested paths: .claude/commands/username/name.md
+            name = source_path.stem if source_path.is_file() else source_path.name
             installed_path = base_path / subdir / username / f"{name}.md"
             return installed_path.is_file()
 
@@ -40,7 +46,10 @@ def _is_installed(dep: Dependency, base_path: Path, username: str) -> bool:
             name = parts[-1]
 
             if dep.type == "skill":
-                installed_path = base_path / subdir / remote_username / name
+                # Skills use flattened colon-namespaced directory names
+                # e.g., .claude/skills/dsjacobsen:golang-pro/
+                flattened_name = compute_flattened_skill_name(remote_username, [name])
+                installed_path = base_path / subdir / flattened_name
                 return installed_path.is_dir() and (installed_path / "SKILL.md").exists()
             else:
                 installed_path = base_path / subdir / remote_username / f"{name}.md"
