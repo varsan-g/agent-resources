@@ -5,32 +5,26 @@ from pathlib import Path
 from typing import Annotated, List, Optional
 
 import typer
-from rich.console import Console
 
-from agr.cli.common import handle_remove_bundle, handle_remove_resource, handle_remove_unified, get_base_path
+from agr.cli.common import (
+    TYPE_TO_SUBDIR,
+    console,
+    extract_type_from_args,
+    find_repo_root,
+    get_base_path,
+    handle_remove_bundle,
+    handle_remove_resource,
+    handle_remove_unified,
+    is_local_path,
+)
 from agr.config import find_config, AgrConfig
 from agr.fetcher import ResourceType
 from agr.github import get_username_from_git_remote
-
-console = Console()
 
 # Deprecated subcommand names
 DEPRECATED_SUBCOMMANDS = {"skill", "command", "agent", "bundle"}
 
 
-def _is_local_path(ref: str) -> bool:
-    """Check if a reference is a local path."""
-    return ref.startswith(("./", "/", "../"))
-
-
-def _find_repo_root() -> Path:
-    """Find the repository root by looking for .git directory."""
-    current = Path.cwd()
-    while current != current.parent:
-        if (current / ".git").exists():
-            return current
-        current = current.parent
-    return Path.cwd()
 
 
 def handle_remove_local(
@@ -60,7 +54,7 @@ def handle_remove_local(
         raise typer.Exit(1)
 
     # Get username for finding installed resource
-    repo_root = _find_repo_root()
+    repo_root = find_repo_root()
     username = get_username_from_git_remote(repo_root)
     if not username:
         username = "local"
@@ -69,13 +63,7 @@ def handle_remove_local(
     source_path = Path(local_path)
     name = source_path.stem if source_path.is_file() else source_path.name
 
-    type_to_subdir = {
-        "skill": "skills",
-        "command": "commands",
-        "agent": "agents",
-        "package": "packages",
-    }
-    subdir = type_to_subdir.get(dep.type, "skills")
+    subdir = TYPE_TO_SUBDIR.get(dep.type, "skills")
 
     base_path = get_base_path(global_install)
 
@@ -103,38 +91,6 @@ def handle_remove_local(
 
     console.print(f"[green]Removed '{local_path}' from agr.toml[/green]")
 
-
-def extract_type_from_args(
-    args: list[str] | None, explicit_type: str | None
-) -> tuple[list[str], str | None]:
-    """
-    Extract --type/-t option from args list if present.
-
-    When --type or -t appears after the resource name, Typer captures it
-    as part of the variadic args list. This function extracts it.
-
-    Args:
-        args: The argument list (may contain --type/-t)
-        explicit_type: The resource_type value from Typer (may be None if type was in args)
-
-    Returns:
-        Tuple of (cleaned_args, resource_type)
-    """
-    if not args or explicit_type is not None:
-        return args or [], explicit_type
-
-    cleaned_args = []
-    resource_type = None
-    i = 0
-    while i < len(args):
-        if args[i] in ("--type", "-t") and i + 1 < len(args):
-            resource_type = args[i + 1]
-            i += 2  # Skip both --type and its value
-        else:
-            cleaned_args.append(args[i])
-            i += 1
-
-    return cleaned_args, resource_type
 
 app = typer.Typer(
     help="Remove skills, commands, or agents.",
@@ -190,7 +146,7 @@ def remove_unified(
     first_arg = cleaned_args[0]
 
     # Handle local paths
-    if _is_local_path(first_arg):
+    if is_local_path(first_arg):
         handle_remove_local(first_arg, global_install)
         return
 

@@ -196,27 +196,27 @@ class TestAddGlob:
 
 
 class TestIsLocalPath:
-    """Tests for _is_local_path helper."""
+    """Tests for is_local_path helper."""
 
     def test_recognizes_dot_slash(self):
-        from agr.cli.add import _is_local_path
-        assert _is_local_path("./path/to/file") is True
+        from agr.cli.common import is_local_path
+        assert is_local_path("./path/to/file") is True
 
     def test_recognizes_absolute_path(self):
-        from agr.cli.add import _is_local_path
-        assert _is_local_path("/absolute/path") is True
+        from agr.cli.common import is_local_path
+        assert is_local_path("/absolute/path") is True
 
     def test_recognizes_parent_path(self):
-        from agr.cli.add import _is_local_path
-        assert _is_local_path("../parent/path") is True
+        from agr.cli.common import is_local_path
+        assert is_local_path("../parent/path") is True
 
     def test_rejects_remote_ref(self):
-        from agr.cli.add import _is_local_path
-        assert _is_local_path("kasperjunge/commit") is False
+        from agr.cli.common import is_local_path
+        assert is_local_path("kasperjunge/commit") is False
 
     def test_rejects_remote_ref_with_repo(self):
-        from agr.cli.add import _is_local_path
-        assert _is_local_path("kasperjunge/repo/name") is False
+        from agr.cli.common import is_local_path
+        assert is_local_path("kasperjunge/repo/name") is False
 
 
 class TestIsGlobPattern:

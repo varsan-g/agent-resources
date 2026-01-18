@@ -36,10 +36,77 @@ from agr.fetcher import (
 )
 from agr.resolver import resolve_remote_resource, ResourceSource
 
+# Shared console instance for all CLI modules
 console = Console()
 
 # Default repository name when not specified
 DEFAULT_REPO_NAME = "agent-resources"
+
+# Shared mapping from resource type string to subdirectory
+TYPE_TO_SUBDIR: dict[str, str] = {
+    "skill": "skills",
+    "command": "commands",
+    "agent": "agents",
+    "package": "packages",
+}
+
+
+def find_repo_root() -> Path:
+    """Find the repository root by looking for .git directory.
+
+    Returns:
+        Path to the repository root, or current working directory if not in a repo.
+    """
+    current = Path.cwd()
+    while current != current.parent:
+        if (current / ".git").exists():
+            return current
+        current = current.parent
+    return Path.cwd()
+
+
+def is_local_path(ref: str) -> bool:
+    """Check if a reference is a local path.
+
+    Args:
+        ref: A resource reference string
+
+    Returns:
+        True if the reference starts with './', '/', or '../'
+    """
+    return ref.startswith(("./", "/", "../"))
+
+
+def extract_type_from_args(
+    args: list[str] | None, explicit_type: str | None
+) -> tuple[list[str], str | None]:
+    """Extract --type/-t option from args list if present.
+
+    When --type or -t appears after the resource reference, Typer captures it
+    as part of the variadic args list. This function extracts it.
+
+    Args:
+        args: The argument list (may contain --type/-t)
+        explicit_type: The resource_type value from Typer (may be None if type was in args)
+
+    Returns:
+        Tuple of (cleaned_args, resource_type)
+    """
+    if not args or explicit_type is not None:
+        return args or [], explicit_type
+
+    cleaned_args = []
+    resource_type = None
+    i = 0
+    while i < len(args):
+        if args[i] in ("--type", "-t") and i + 1 < len(args):
+            resource_type = args[i + 1]
+            i += 2  # Skip both --type and its value
+        else:
+            cleaned_args.append(args[i])
+            i += 1
+
+    return cleaned_args, resource_type
 
 
 def parse_nested_name(name: str) -> tuple[str, list[str]]:

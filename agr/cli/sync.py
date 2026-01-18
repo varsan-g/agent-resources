@@ -4,17 +4,22 @@ import shutil
 from pathlib import Path
 
 import typer
-from rich.console import Console
 
 from agr.config import AgrConfig, Dependency, find_config
 from agr.exceptions import AgrError, RepoNotFoundError, ResourceNotFoundError
 from agr.fetcher import RESOURCE_CONFIGS, ResourceType, fetch_resource
 from agr.github import get_username_from_git_remote
-from agr.cli.common import DEFAULT_REPO_NAME, fetch_spinner, get_base_path
+from agr.cli.common import (
+    DEFAULT_REPO_NAME,
+    TYPE_TO_SUBDIR,
+    console,
+    fetch_spinner,
+    find_repo_root,
+    get_base_path,
+)
 from agr.utils import compute_flattened_skill_name, compute_path_segments_from_skill_path, update_skill_md_name
 
 app = typer.Typer()
-console = Console()
 
 # Mapping from type string to ResourceType enum
 TYPE_STRING_TO_ENUM = {
@@ -154,14 +159,6 @@ def _remove_namespaced_resource(username: str, name: str, base_path: Path) -> No
             return
 
 
-def _find_repo_root() -> Path | None:
-    """Find the repository root by looking for .git directory."""
-    current = Path.cwd()
-    while current != current.parent:
-        if (current / ".git").exists():
-            return current
-        current = current.parent
-    return None
 
 
 def _sync_local_dependency(
@@ -184,13 +181,7 @@ def _sync_local_dependency(
         return (None, None, (dep.path, f"Source path does not exist: {source_path}"))
 
     # Determine destination path based on type
-    type_to_subdir = {
-        "skill": "skills",
-        "command": "commands",
-        "agent": "agents",
-        "package": "packages",
-    }
-    subdir = type_to_subdir.get(dep.type, "skills")
+    subdir = TYPE_TO_SUBDIR.get(dep.type, "skills")
 
     # Handle package explosion
     if dep.type == "package":
@@ -280,7 +271,7 @@ def _sync_local_dependencies(
     Returns:
         Tuple of (installed, updated, pruned, failed) counts
     """
-    repo_root = _find_repo_root() or Path.cwd()
+    repo_root = find_repo_root() or Path.cwd()
 
     username = get_username_from_git_remote(repo_root)
     if not username:

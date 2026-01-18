@@ -4,10 +4,8 @@ from pathlib import Path
 from typing import Annotated
 
 import typer
-from rich.console import Console
 
-
-console = Console()
+from agr.cli.common import console
 
 app = typer.Typer(
     help="Create new agent resources or repositories.",

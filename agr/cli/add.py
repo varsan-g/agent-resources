@@ -6,15 +6,21 @@ from pathlib import Path
 from typing import Annotated, List, Optional
 
 import typer
-from rich.console import Console
 
-from agr.cli.common import handle_add_bundle, handle_add_resource, handle_add_unified, get_base_path
+from agr.cli.common import (
+    TYPE_TO_SUBDIR,
+    console,
+    find_repo_root,
+    get_base_path,
+    handle_add_bundle,
+    handle_add_resource,
+    handle_add_unified,
+    is_local_path,
+)
 from agr.config import Dependency, get_or_create_config
 from agr.fetcher import ResourceType
 from agr.github import get_username_from_git_remote
 from agr.utils import compute_flattened_skill_name, compute_path_segments_from_skill_path, update_skill_md_name
-
-console = Console()
 
 # Deprecated subcommand names
 DEPRECATED_SUBCOMMANDS = {"skill", "command", "agent", "bundle"}
@@ -66,9 +72,6 @@ def extract_options_from_args(
 
     return cleaned_args, resource_type, to_package, workspace
 
-def _is_local_path(ref: str) -> bool:
-    """Check if a reference is a local path."""
-    return ref.startswith(("./", "/", "../"))
 
 
 def _is_glob_pattern(ref: str) -> bool:
@@ -149,7 +152,7 @@ def handle_add_namespace(
     """
     config_path, config = get_or_create_config()
     base_path = get_base_path(global_install)
-    username = get_username_from_git_remote(_find_repo_root()) or "local"
+    username = get_username_from_git_remote(find_repo_root()) or "local"
     namespace_name = namespace_path.name
 
     added_count = 0
@@ -194,14 +197,6 @@ def handle_add_namespace(
     console.print(f"\n[dim]Added {added_count} resource(s)[/dim]")
 
 
-def _find_repo_root() -> Path:
-    """Find the repository root by looking for .git directory."""
-    current = Path.cwd()
-    while current != current.parent:
-        if (current / ".git").exists():
-            return current
-        current = current.parent
-    return Path.cwd()
 
 
 def _explode_package(
@@ -286,12 +281,7 @@ def _install_local_resource(
         counts = _explode_package(source_path, username, source_path.name, base_path)
         return source_path.name  # Package is exploded to type directories
 
-    type_to_subdir = {
-        "skill": "skills",
-        "command": "commands",
-        "agent": "agents",
-    }
-    subdir = type_to_subdir.get(resource_type, "skills")
+    subdir = TYPE_TO_SUBDIR.get(resource_type, "skills")
 
     if resource_type == "skill":
         # Skills use flattened colon-namespaced directory names
@@ -379,7 +369,7 @@ def handle_add_local(
     name = path.stem if path.is_file() else path.name
 
     # Get username for namespacing
-    repo_root = _find_repo_root()
+    repo_root = find_repo_root()
     username = get_username_from_git_remote(repo_root)
     if not username:
         username = "local"
@@ -428,7 +418,7 @@ def handle_add_directory(
     """
     config_path, config = get_or_create_config()
     base_path = get_base_path(global_install)
-    username = get_username_from_git_remote(_find_repo_root()) or "local"
+    username = get_username_from_git_remote(find_repo_root()) or "local"
 
     added_count = 0
 
@@ -508,7 +498,7 @@ def handle_add_glob(
     console.print(f"Found {len(paths)} matching path(s)")
 
     # Get username for namespacing
-    repo_root = _find_repo_root()
+    repo_root = find_repo_root()
     username = get_username_from_git_remote(repo_root)
     if not username:
         username = "local"
@@ -627,7 +617,7 @@ def add_unified(
         raise typer.Exit(0)
 
     # Check for multiple local paths (shell-expanded glob)
-    local_paths = [arg for arg in cleaned_args if _is_local_path(arg)]
+    local_paths = [arg for arg in cleaned_args if is_local_path(arg)]
     if len(local_paths) > 1:
         # Shell expanded a glob pattern, process all local paths
         for local_path in local_paths:
@@ -637,12 +627,12 @@ def add_unified(
     first_arg = cleaned_args[0]
 
     # Handle glob patterns
-    if _is_local_path(first_arg) and _is_glob_pattern(first_arg):
+    if is_local_path(first_arg) and _is_glob_pattern(first_arg):
         handle_add_glob(first_arg, resource_type, global_install)
         return
 
     # Handle local paths
-    if _is_local_path(first_arg):
+    if is_local_path(first_arg):
         handle_add_local(first_arg, resource_type, global_install, workspace)
         return
 

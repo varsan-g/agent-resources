@@ -8,11 +8,12 @@ from pathlib import Path
 from typing import Annotated, List, Optional
 
 import typer
-from rich.console import Console
 
 from agr.cli.common import (
     DEFAULT_REPO_NAME,
+    console,
     discover_runnable_resource,
+    extract_type_from_args,
     fetch_spinner,
     get_destination,
     parse_resource_ref,
@@ -23,45 +24,10 @@ from agr.fetcher import RESOURCE_CONFIGS, ResourceType, downloaded_repo, fetch_r
 # Deprecated subcommand names
 DEPRECATED_SUBCOMMANDS = {"skill", "command"}
 
-
-def extract_type_from_args(
-    args: list[str] | None, explicit_type: str | None
-) -> tuple[list[str], str | None]:
-    """
-    Extract --type/-t option from args list if present.
-
-    When --type or -t appears after the resource reference, Typer captures it
-    as part of the variadic args list. This function extracts it.
-
-    Args:
-        args: The argument list (may contain --type/-t)
-        explicit_type: The resource_type value from Typer (may be None if type was in args)
-
-    Returns:
-        Tuple of (cleaned_args, resource_type)
-    """
-    if not args or explicit_type is not None:
-        return args or [], explicit_type
-
-    cleaned_args = []
-    resource_type = None
-    i = 0
-    while i < len(args):
-        if args[i] in ("--type", "-t") and i + 1 < len(args):
-            resource_type = args[i + 1]
-            i += 2  # Skip both --type and its value
-        else:
-            cleaned_args.append(args[i])
-            i += 1
-
-    return cleaned_args, resource_type
-
-
 app = typer.Typer(
     name="agrx",
     help="Run skills and commands without permanent installation",
 )
-console = Console()
 
 AGRX_PREFIX = "_agrx_"  # Prefix for temporary resources to avoid conflicts
 

@@ -5,39 +5,20 @@ from pathlib import Path
 from typing import Annotated
 
 import typer
-from rich.console import Console
 from rich.table import Table
 
 from agr.config import AgrConfig, Dependency, find_config
-from agr.cli.common import get_base_path
+from agr.cli.common import TYPE_TO_SUBDIR, console, find_repo_root, get_base_path
 from agr.github import get_username_from_git_remote
-
-console = Console()
 
 app = typer.Typer(
     help="List installed dependencies from agr.toml.",
 )
 
 
-def _find_repo_root() -> Path:
-    """Find the repository root by looking for .git directory."""
-    current = Path.cwd()
-    while current != current.parent:
-        if (current / ".git").exists():
-            return current
-        current = current.parent
-    return Path.cwd()
-
-
 def _is_installed(dep: Dependency, base_path: Path, username: str) -> bool:
     """Check if a dependency is installed in .claude/."""
-    type_to_subdir = {
-        "skill": "skills",
-        "command": "commands",
-        "agent": "agents",
-        "package": "packages",
-    }
-    subdir = type_to_subdir.get(dep.type, "skills")
+    subdir = TYPE_TO_SUBDIR.get(dep.type, "skills")
 
     if dep.is_local and dep.path:
         # Local dependency - check if installed
@@ -198,7 +179,7 @@ def list_dependencies(
 
     # Get base path and username for install status check
     base_path = get_base_path(global_install)
-    repo_root = _find_repo_root()
+    repo_root = find_repo_root()
     username = get_username_from_git_remote(repo_root) or "local"
 
     # Format output

@@ -460,70 +460,10 @@ def fetch_resource(
         ResourceNotFoundError: If the resource doesn't exist in the repo
         ResourceExistsError: If resource exists locally and overwrite=False
     """
-    config = RESOURCE_CONFIGS[resource_type]
-
-    # Build destination path - skills use flattened colon-namespaced names
-    if username and config.is_directory:
-        # Skills: .claude/skills/<flattened_name>/
-        flattened_name = compute_flattened_skill_name(username, path_segments)
-        resource_dest = dest / flattened_name
-    elif username:
-        # Commands/agents: .claude/commands/username/name.md
-        namespaced_dest = dest / username
-        resource_dest = _build_resource_path(namespaced_dest, config, path_segments)
-    else:
-        resource_dest = _build_resource_path(dest, config, path_segments)
-
-    # Check if resource already exists locally
-    if resource_dest.exists() and not overwrite:
-        raise ResourceExistsError(
-            f"{resource_type.value.capitalize()} '{name}' already exists at {resource_dest}\n"
-            f"Use --overwrite to replace it."
+    with downloaded_repo(repo_username, repo_name) as repo_dir:
+        return fetch_resource_from_repo_dir(
+            repo_dir, name, path_segments, dest, resource_type, overwrite, username
         )
-
-    # Download tarball
-    tarball_url = (
-        f"https://github.com/{repo_username}/{repo_name}/archive/refs/heads/main.tar.gz"
-    )
-
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        repo_dir = _download_and_extract_tarball(tarball_url, repo_username, repo_name, Path(tmp_dir))
-        source_base = repo_dir / config.source_subdir
-        resource_source = _build_resource_path(source_base, config, path_segments)
-
-        if not resource_source.exists():
-            # Build display path for error message
-            nested_path = "/".join(path_segments)
-            if config.is_directory:
-                expected_location = f"{config.source_subdir}/{nested_path}/"
-            else:
-                expected_location = f"{config.source_subdir}/{nested_path}{config.file_extension}"
-            raise ResourceNotFoundError(
-                f"{resource_type.value.capitalize()} '{name}' not found in {repo_username}/{repo_name}.\n"
-                f"Expected location: {expected_location}"
-            )
-
-        # Remove existing if overwriting
-        if resource_dest.exists():
-            if config.is_directory:
-                shutil.rmtree(resource_dest)
-            else:
-                resource_dest.unlink()
-
-        # Ensure destination parent exists (including nested directories)
-        resource_dest.parent.mkdir(parents=True, exist_ok=True)
-
-        # Copy resource to destination
-        if config.is_directory:
-            shutil.copytree(resource_source, resource_dest)
-            # Update SKILL.md name field for skills
-            if username:
-                flattened_name = compute_flattened_skill_name(username, path_segments)
-                update_skill_md_name(resource_dest, flattened_name)
-        else:
-            shutil.copy2(resource_source, resource_dest)
-
-    return resource_dest
 
 
 # Bundle-related dataclasses and functions
@@ -712,55 +652,8 @@ def fetch_bundle(
         RepoNotFoundError: If the repository doesn't exist
         BundleNotFoundError: If bundle directory doesn't exist in any location
     """
-    tarball_url = (
-        f"https://github.com/{username}/{repo_name}/archive/refs/heads/main.tar.gz"
-    )
-    result = BundleInstallResult()
-
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        repo_dir = _download_and_extract_tarball(
-            tarball_url, username, repo_name, Path(tmp_dir)
-        )
-
-        contents = discover_bundle_contents(repo_dir, bundle_name)
-
-        if contents.is_empty:
-            raise BundleNotFoundError(
-                f"Bundle '{bundle_name}' not found in {username}/{repo_name}.\n"
-                f"Expected one of:\n"
-                f"  - .claude/skills/{bundle_name}/*/SKILL.md\n"
-                f"  - .claude/commands/{bundle_name}/*.md\n"
-                f"  - .claude/agents/{bundle_name}/*.md"
-            )
-
-        # Install skills (directories)
-        result.installed_skills, result.skipped_skills = _install_bundle_directory(
-            contents.skills,
-            repo_dir / ".claude" / "skills" / bundle_name,
-            dest_base / "skills",
-            bundle_name,
-            overwrite,
-        )
-
-        # Install commands (files)
-        result.installed_commands, result.skipped_commands = _install_bundle_files(
-            contents.commands,
-            repo_dir / ".claude" / "commands" / bundle_name,
-            dest_base / "commands",
-            bundle_name,
-            overwrite,
-        )
-
-        # Install agents (files)
-        result.installed_agents, result.skipped_agents = _install_bundle_files(
-            contents.agents,
-            repo_dir / ".claude" / "agents" / bundle_name,
-            dest_base / "agents",
-            bundle_name,
-            overwrite,
-        )
-
-    return result
+    with downloaded_repo(username, repo_name) as repo_dir:
+        return fetch_bundle_from_repo_dir(repo_dir, bundle_name, dest_base, overwrite)
 
 
 def remove_bundle(bundle_name: str, dest_base: Path) -> BundleRemoveResult:
