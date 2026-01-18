@@ -17,8 +17,8 @@ runner = CliRunner()
 class TestRemoveUnifiedCommand:
     """Tests for the unified remove command."""
 
-    @patch("agr.cli.common.discover_local_resource_type")
-    @patch("agr.cli.common.handle_remove_resource")
+    @patch("agr.cli.handlers.discover_local_resource_type")
+    @patch("agr.cli.handlers.handle_remove_resource")
     def test_auto_detects_skill(self, mock_remove, mock_discover):
         """Test that auto-detection correctly identifies a local skill."""
         mock_discover.return_value = DiscoveryResult(
@@ -37,7 +37,7 @@ class TestRemoveUnifiedCommand:
         call_args = mock_remove.call_args
         assert call_args[0][1] == ResourceType.SKILL
 
-    @patch("agr.cli.common.handle_remove_resource")
+    @patch("agr.cli.handlers.handle_remove_resource")
     def test_explicit_type_skill(self, mock_handler):
         """Test that --type skill delegates to skill handler."""
         result = runner.invoke(app, ["remove", "--type", "skill", "hello-world"])
@@ -46,7 +46,7 @@ class TestRemoveUnifiedCommand:
         call_args = mock_handler.call_args
         assert call_args[0][1] == ResourceType.SKILL
 
-    @patch("agr.cli.common.handle_remove_resource")
+    @patch("agr.cli.handlers.handle_remove_resource")
     def test_explicit_type_command(self, mock_handler):
         """Test that --type command delegates to command handler."""
         result = runner.invoke(app, ["remove", "--type", "command", "hello"])
@@ -55,7 +55,7 @@ class TestRemoveUnifiedCommand:
         call_args = mock_handler.call_args
         assert call_args[0][1] == ResourceType.COMMAND
 
-    @patch("agr.cli.common.handle_remove_resource")
+    @patch("agr.cli.handlers.handle_remove_resource")
     def test_explicit_type_agent(self, mock_handler):
         """Test that --type agent delegates to agent handler."""
         result = runner.invoke(app, ["remove", "--type", "agent", "hello-agent"])
@@ -64,7 +64,7 @@ class TestRemoveUnifiedCommand:
         call_args = mock_handler.call_args
         assert call_args[0][1] == ResourceType.AGENT
 
-    @patch("agr.cli.common.handle_remove_bundle")
+    @patch("agr.cli.handlers.handle_remove_bundle")
     def test_explicit_type_bundle(self, mock_handler):
         """Test that --type bundle delegates to bundle handler."""
         result = runner.invoke(app, ["remove", "--type", "bundle", "my-bundle"])
@@ -78,7 +78,7 @@ class TestRemoveUnifiedCommand:
         assert result.exit_code == 1
         assert "Unknown resource type" in result.output
 
-    @patch("agr.cli.common.discover_local_resource_type")
+    @patch("agr.cli.handlers.discover_local_resource_type")
     def test_ambiguous_resource_shows_error(self, mock_discover):
         """Test that ambiguous local resources show an error with --type suggestion."""
         mock_discover.return_value = DiscoveryResult(
@@ -102,7 +102,7 @@ class TestRemoveUnifiedCommand:
         assert "multiple types" in result.output.lower()
         assert "--type" in result.output
 
-    @patch("agr.cli.common.discover_local_resource_type")
+    @patch("agr.cli.handlers.discover_local_resource_type")
     def test_not_found_shows_error(self, mock_discover):
         """Test that not found resources show a helpful error."""
         mock_discover.return_value = DiscoveryResult(resources=[])
@@ -116,7 +116,7 @@ class TestRemoveUnifiedCommand:
 class TestDeprecatedRemoveCommands:
     """Tests for deprecated remove subcommands."""
 
-    @patch("agr.cli.common.handle_remove_resource")
+    @patch("agr.cli.handlers.handle_remove_resource")
     def test_remove_skill_shows_deprecation_warning(self, mock_handler):
         """Test that 'agr remove skill' shows deprecation warning."""
         result = runner.invoke(app, ["remove", "skill", "hello-world"])
@@ -124,7 +124,7 @@ class TestDeprecatedRemoveCommands:
         assert "deprecated" in result.output.lower()
         assert "agr remove hello-world" in result.output
 
-    @patch("agr.cli.common.handle_remove_resource")
+    @patch("agr.cli.handlers.handle_remove_resource")
     def test_remove_command_shows_deprecation_warning(self, mock_handler):
         """Test that 'agr remove command' shows deprecation warning."""
         result = runner.invoke(app, ["remove", "command", "hello"])
@@ -132,7 +132,7 @@ class TestDeprecatedRemoveCommands:
         assert "deprecated" in result.output.lower()
         assert "agr remove hello" in result.output
 
-    @patch("agr.cli.common.handle_remove_resource")
+    @patch("agr.cli.handlers.handle_remove_resource")
     def test_remove_agent_shows_deprecation_warning(self, mock_handler):
         """Test that 'agr remove agent' shows deprecation warning."""
         result = runner.invoke(app, ["remove", "agent", "hello-agent"])

@@ -173,8 +173,8 @@ class TestConsole:
 class TestAddToAgrTomlWarnings:
     """Tests for _add_to_agr_toml exception handling."""
 
-    @patch("agr.cli.common.get_or_create_config")
-    @patch("agr.cli.common.console")
+    @patch("agr.cli.handlers.get_or_create_config")
+    @patch("agr.cli.handlers.console")
     def test_warns_on_config_parse_error(self, mock_console, mock_get_config):
         """Test that ConfigParseError triggers a warning message."""
         mock_get_config.side_effect = ConfigParseError("Invalid TOML syntax")
@@ -187,8 +187,8 @@ class TestAddToAgrTomlWarnings:
         assert "Warning" in call_args
         assert "Could not add to agr.toml" in call_args
 
-    @patch("agr.cli.common.get_or_create_config")
-    @patch("agr.cli.common.console")
+    @patch("agr.cli.handlers.get_or_create_config")
+    @patch("agr.cli.handlers.console")
     def test_warns_on_value_error(self, mock_console, mock_get_config):
         """Test that ValueError triggers a warning message."""
         mock_get_config.side_effect = ValueError("Invalid value")
@@ -199,8 +199,8 @@ class TestAddToAgrTomlWarnings:
         call_args = mock_console.print.call_args[0][0]
         assert "Warning" in call_args
 
-    @patch("agr.cli.common.get_or_create_config")
-    @patch("agr.cli.common.console")
+    @patch("agr.cli.handlers.get_or_create_config")
+    @patch("agr.cli.handlers.console")
     def test_warns_on_os_error(self, mock_console, mock_get_config):
         """Test that OSError triggers a warning message."""
         mock_get_config.side_effect = OSError("Permission denied")
@@ -211,7 +211,7 @@ class TestAddToAgrTomlWarnings:
         call_args = mock_console.print.call_args[0][0]
         assert "Warning" in call_args
 
-    @patch("agr.cli.common.console")
+    @patch("agr.cli.handlers.console")
     def test_skips_for_global_install(self, mock_console):
         """Test that global installs skip agr.toml update entirely."""
         _add_to_agr_toml("testuser/skill", ResourceType.SKILL, global_install=True)
@@ -225,7 +225,7 @@ class TestRemoveFromAgrTomlWarnings:
 
     @patch("agr.config.find_config")
     @patch("agr.config.AgrConfig.load")
-    @patch("agr.cli.common.console")
+    @patch("agr.cli.handlers.console")
     def test_warns_on_config_parse_error(self, mock_console, mock_load, mock_find_config):
         """Test that ConfigParseError triggers a warning message."""
         mock_find_config.return_value = Path("/fake/agr.toml")
@@ -241,7 +241,7 @@ class TestRemoveFromAgrTomlWarnings:
 
     @patch("agr.config.find_config")
     @patch("agr.config.AgrConfig.load")
-    @patch("agr.cli.common.console")
+    @patch("agr.cli.handlers.console")
     def test_warns_on_value_error(self, mock_console, mock_load, mock_find_config):
         """Test that ValueError triggers a warning message."""
         mock_find_config.return_value = Path("/fake/agr.toml")
@@ -255,7 +255,7 @@ class TestRemoveFromAgrTomlWarnings:
 
     @patch("agr.config.find_config")
     @patch("agr.config.AgrConfig.load")
-    @patch("agr.cli.common.console")
+    @patch("agr.cli.handlers.console")
     def test_warns_on_os_error(self, mock_console, mock_load, mock_find_config):
         """Test that OSError triggers a warning message."""
         mock_find_config.return_value = Path("/fake/agr.toml")
@@ -267,7 +267,7 @@ class TestRemoveFromAgrTomlWarnings:
         call_args = mock_console.print.call_args[0][0]
         assert "Warning" in call_args
 
-    @patch("agr.cli.common.console")
+    @patch("agr.cli.handlers.console")
     def test_skips_for_global_install(self, mock_console):
         """Test that global installs skip agr.toml update entirely."""
         _remove_from_agr_toml("test-skill", username=None, global_install=True)

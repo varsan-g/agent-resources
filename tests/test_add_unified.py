@@ -17,9 +17,9 @@ runner = CliRunner()
 class TestAddUnifiedCommand:
     """Tests for the unified add command."""
 
-    @patch("agr.cli.common.downloaded_repo")
-    @patch("agr.cli.common.discover_resource_type_from_dir")
-    @patch("agr.cli.common.fetch_resource_from_repo_dir")
+    @patch("agr.cli.handlers.downloaded_repo")
+    @patch("agr.cli.handlers.discover_resource_type_from_dir")
+    @patch("agr.cli.handlers.fetch_resource_from_repo_dir")
     def test_auto_detects_skill(self, mock_fetch, mock_discover, mock_download, tmp_path):
         """Test that auto-detection correctly identifies a skill."""
         mock_download.return_value.__enter__ = MagicMock(return_value=tmp_path)
@@ -44,8 +44,8 @@ class TestAddUnifiedCommand:
         call_args = mock_fetch.call_args
         assert call_args[0][4] == ResourceType.SKILL  # resource_type argument
 
-    @patch("agr.cli.common._add_to_agr_toml")
-    @patch("agr.cli.common.fetch_resource")
+    @patch("agr.cli.handlers._add_to_agr_toml")
+    @patch("agr.cli.handlers.fetch_resource")
     def test_explicit_type_skill(self, mock_fetch, mock_add_toml):
         """Test that --type skill fetches a skill."""
         result = runner.invoke(app, ["add", "--type", "skill", "testuser/hello-world"])
@@ -54,8 +54,8 @@ class TestAddUnifiedCommand:
         call_args = mock_fetch.call_args
         assert call_args[0][5] == ResourceType.SKILL  # resource_type is 6th positional arg
 
-    @patch("agr.cli.common._add_to_agr_toml")
-    @patch("agr.cli.common.fetch_resource")
+    @patch("agr.cli.handlers._add_to_agr_toml")
+    @patch("agr.cli.handlers.fetch_resource")
     def test_explicit_type_command(self, mock_fetch, mock_add_toml):
         """Test that --type command fetches a command."""
         result = runner.invoke(app, ["add", "--type", "command", "testuser/hello"])
@@ -64,8 +64,8 @@ class TestAddUnifiedCommand:
         call_args = mock_fetch.call_args
         assert call_args[0][5] == ResourceType.COMMAND
 
-    @patch("agr.cli.common._add_to_agr_toml")
-    @patch("agr.cli.common.fetch_resource")
+    @patch("agr.cli.handlers._add_to_agr_toml")
+    @patch("agr.cli.handlers.fetch_resource")
     def test_explicit_type_agent(self, mock_fetch, mock_add_toml):
         """Test that --type agent fetches an agent."""
         result = runner.invoke(app, ["add", "--type", "agent", "testuser/hello-agent"])
@@ -74,8 +74,8 @@ class TestAddUnifiedCommand:
         call_args = mock_fetch.call_args
         assert call_args[0][5] == ResourceType.AGENT
 
-    @patch("agr.cli.common._add_to_agr_toml")
-    @patch("agr.cli.common.fetch_bundle")
+    @patch("agr.cli.handlers._add_to_agr_toml")
+    @patch("agr.cli.handlers.fetch_bundle")
     def test_explicit_type_bundle(self, mock_fetch, mock_add_toml):
         """Test that --type bundle fetches a bundle."""
         from agr.fetcher import BundleInstallResult
@@ -86,8 +86,8 @@ class TestAddUnifiedCommand:
         mock_fetch.assert_called_once()
 
     # Tests for --type AFTER resource reference (common user pattern)
-    @patch("agr.cli.common._add_to_agr_toml")
-    @patch("agr.cli.common.fetch_resource")
+    @patch("agr.cli.handlers._add_to_agr_toml")
+    @patch("agr.cli.handlers.fetch_resource")
     def test_explicit_type_after_ref_skill(self, mock_fetch, mock_add_toml):
         """Test that 'agr add ref --type skill' works (type after resource)."""
         result = runner.invoke(app, ["add", "testuser/hello-world", "--type", "skill"])
@@ -96,8 +96,8 @@ class TestAddUnifiedCommand:
         call_args = mock_fetch.call_args
         assert call_args[0][5] == ResourceType.SKILL
 
-    @patch("agr.cli.common._add_to_agr_toml")
-    @patch("agr.cli.common.fetch_resource")
+    @patch("agr.cli.handlers._add_to_agr_toml")
+    @patch("agr.cli.handlers.fetch_resource")
     def test_explicit_type_after_ref_command(self, mock_fetch, mock_add_toml):
         """Test that 'agr add ref --type command' works (type after resource)."""
         result = runner.invoke(app, ["add", "testuser/hello", "--type", "command"])
@@ -106,8 +106,8 @@ class TestAddUnifiedCommand:
         call_args = mock_fetch.call_args
         assert call_args[0][5] == ResourceType.COMMAND
 
-    @patch("agr.cli.common._add_to_agr_toml")
-    @patch("agr.cli.common.fetch_resource")
+    @patch("agr.cli.handlers._add_to_agr_toml")
+    @patch("agr.cli.handlers.fetch_resource")
     def test_explicit_type_after_ref_agent(self, mock_fetch, mock_add_toml):
         """Test that 'agr add ref --type agent' works (type after resource)."""
         result = runner.invoke(app, ["add", "testuser/hello-agent", "--type", "agent"])
@@ -116,8 +116,8 @@ class TestAddUnifiedCommand:
         call_args = mock_fetch.call_args
         assert call_args[0][5] == ResourceType.AGENT
 
-    @patch("agr.cli.common._add_to_agr_toml")
-    @patch("agr.cli.common.fetch_resource")
+    @patch("agr.cli.handlers._add_to_agr_toml")
+    @patch("agr.cli.handlers.fetch_resource")
     def test_explicit_type_short_flag_after_ref(self, mock_fetch, mock_add_toml):
         """Test that 'agr add ref -t command' works (short flag after resource)."""
         result = runner.invoke(app, ["add", "testuser/hello", "-t", "command"])
@@ -133,8 +133,8 @@ class TestAddUnifiedCommand:
         assert result.exit_code == 1
         assert "Unknown resource type" in result.output
 
-    @patch("agr.cli.common.downloaded_repo")
-    @patch("agr.cli.common.discover_resource_type_from_dir")
+    @patch("agr.cli.handlers.downloaded_repo")
+    @patch("agr.cli.handlers.discover_resource_type_from_dir")
     def test_ambiguous_resource_shows_error(self, mock_discover, mock_download, tmp_path):
         """Test that ambiguous resources show an error with --type suggestion."""
         mock_download.return_value.__enter__ = MagicMock(return_value=tmp_path)
@@ -161,8 +161,8 @@ class TestAddUnifiedCommand:
         assert "multiple types" in result.output.lower()
         assert "--type" in result.output
 
-    @patch("agr.cli.common.downloaded_repo")
-    @patch("agr.cli.common.discover_resource_type_from_dir")
+    @patch("agr.cli.handlers.downloaded_repo")
+    @patch("agr.cli.handlers.discover_resource_type_from_dir")
     def test_not_found_shows_error(self, mock_discover, mock_download, tmp_path):
         """Test that not found resources show a helpful error."""
         mock_download.return_value.__enter__ = MagicMock(return_value=tmp_path)
@@ -179,7 +179,7 @@ class TestAddUnifiedCommand:
 class TestDeprecatedAddCommands:
     """Tests for deprecated add subcommands."""
 
-    @patch("agr.cli.common.handle_add_resource")
+    @patch("agr.cli.handlers.handle_add_resource")
     def test_add_skill_shows_deprecation_warning(self, mock_handler):
         """Test that 'agr add skill' shows deprecation warning."""
         result = runner.invoke(app, ["add", "skill", "testuser/hello-world"])
@@ -187,7 +187,7 @@ class TestDeprecatedAddCommands:
         assert "deprecated" in result.output.lower()
         assert "agr add testuser/hello-world" in result.output
 
-    @patch("agr.cli.common.handle_add_resource")
+    @patch("agr.cli.handlers.handle_add_resource")
     def test_add_command_shows_deprecation_warning(self, mock_handler):
         """Test that 'agr add command' shows deprecation warning."""
         result = runner.invoke(app, ["add", "command", "testuser/hello"])
@@ -195,7 +195,7 @@ class TestDeprecatedAddCommands:
         assert "deprecated" in result.output.lower()
         assert "agr add testuser/hello" in result.output
 
-    @patch("agr.cli.common.handle_add_resource")
+    @patch("agr.cli.handlers.handle_add_resource")
     def test_add_agent_shows_deprecation_warning(self, mock_handler):
         """Test that 'agr add agent' shows deprecation warning."""
         result = runner.invoke(app, ["add", "agent", "testuser/hello-agent"])
@@ -203,7 +203,7 @@ class TestDeprecatedAddCommands:
         assert "deprecated" in result.output.lower()
         assert "agr add testuser/hello-agent" in result.output
 
-    @patch("agr.cli.common.handle_add_bundle")
+    @patch("agr.cli.handlers.handle_add_bundle")
     def test_add_bundle_shows_deprecation_warning(self, mock_handler):
         """Test that 'agr add bundle' shows deprecation warning."""
         result = runner.invoke(app, ["add", "bundle", "testuser/my-bundle"])
@@ -233,9 +233,9 @@ class TestDeprecatedAddCommands:
 class TestAddNamespacedAndToml:
     """Tests for namespaced paths and agr.toml integration."""
 
-    @patch("agr.cli.common.downloaded_repo")
-    @patch("agr.cli.common.discover_resource_type_from_dir")
-    @patch("agr.cli.common.fetch_resource_from_repo_dir")
+    @patch("agr.cli.handlers.downloaded_repo")
+    @patch("agr.cli.handlers.discover_resource_type_from_dir")
+    @patch("agr.cli.handlers.fetch_resource_from_repo_dir")
     def test_add_installs_to_namespaced_path(
         self, mock_fetch, mock_discover, mock_download, tmp_path, monkeypatch
     ):
@@ -265,9 +265,9 @@ class TestAddNamespacedAndToml:
         # Check username was passed (should be in kwargs or as positional arg)
         assert "username" in call_kwargs or len(call_args) > 5
 
-    @patch("agr.cli.common.downloaded_repo")
-    @patch("agr.cli.common.discover_resource_type_from_dir")
-    @patch("agr.cli.common.fetch_resource_from_repo_dir")
+    @patch("agr.cli.handlers.downloaded_repo")
+    @patch("agr.cli.handlers.discover_resource_type_from_dir")
+    @patch("agr.cli.handlers.fetch_resource_from_repo_dir")
     def test_add_creates_agr_toml_if_missing(
         self, mock_fetch, mock_discover, mock_download, tmp_path, monkeypatch
     ):
@@ -296,9 +296,9 @@ class TestAddNamespacedAndToml:
         # Verify agr.toml was created
         assert (tmp_path / "agr.toml").exists()
 
-    @patch("agr.cli.common.downloaded_repo")
-    @patch("agr.cli.common.discover_resource_type_from_dir")
-    @patch("agr.cli.common.fetch_resource_from_repo_dir")
+    @patch("agr.cli.handlers.downloaded_repo")
+    @patch("agr.cli.handlers.discover_resource_type_from_dir")
+    @patch("agr.cli.handlers.fetch_resource_from_repo_dir")
     def test_add_adds_entry_to_existing_agr_toml(
         self, mock_fetch, mock_discover, mock_download, tmp_path, monkeypatch
     ):
@@ -332,9 +332,9 @@ class TestAddNamespacedAndToml:
         assert config.get_by_handle("alice/review") is not None
         assert config.get_by_handle("kasperjunge/commit") is not None
 
-    @patch("agr.cli.common.downloaded_repo")
-    @patch("agr.cli.common.discover_resource_type_from_dir")
-    @patch("agr.cli.common.fetch_resource_from_repo_dir")
+    @patch("agr.cli.handlers.downloaded_repo")
+    @patch("agr.cli.handlers.discover_resource_type_from_dir")
+    @patch("agr.cli.handlers.fetch_resource_from_repo_dir")
     def test_agr_toml_contains_correct_dependency(
         self, mock_fetch, mock_discover, mock_download, tmp_path, monkeypatch
     ):
@@ -363,9 +363,9 @@ class TestAddNamespacedAndToml:
         assert dep is not None
         # Verify format: username/name, not username/repo/name for default repo
 
-    @patch("agr.cli.common.downloaded_repo")
-    @patch("agr.cli.common.discover_resource_type_from_dir")
-    @patch("agr.cli.common.fetch_resource_from_repo_dir")
+    @patch("agr.cli.handlers.downloaded_repo")
+    @patch("agr.cli.handlers.discover_resource_type_from_dir")
+    @patch("agr.cli.handlers.fetch_resource_from_repo_dir")
     def test_add_with_custom_repo_stores_full_ref(
         self, mock_fetch, mock_discover, mock_download, tmp_path, monkeypatch
     ):
@@ -393,8 +393,8 @@ class TestAddNamespacedAndToml:
         dep = config.get_by_handle("kasperjunge/custom-repo/commit")
         assert dep is not None
 
-    @patch("agr.cli.common._add_to_agr_toml")
-    @patch("agr.cli.common.fetch_resource")
+    @patch("agr.cli.handlers._add_to_agr_toml")
+    @patch("agr.cli.handlers.fetch_resource")
     def test_explicit_type_installs_to_namespaced_path(self, mock_fetch, mock_add_toml, tmp_path, monkeypatch):
         """Test that explicit --type still installs to namespaced path."""
         monkeypatch.chdir(tmp_path)
