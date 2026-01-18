@@ -36,8 +36,8 @@ class TestAddLocal:
         assert dep is not None
         assert dep.type == "skill"
 
-        # Verify installed to .claude/
-        installed = tmp_path / ".claude" / "skills" / "local" / "my-skill" / "SKILL.md"
+        # Verify installed to .claude/ with flattened name
+        installed = tmp_path / ".claude" / "skills" / "local:my-skill" / "SKILL.md"
         assert installed.exists()
 
     def test_add_local_command_file(self, tmp_path: Path, monkeypatch):
@@ -325,8 +325,9 @@ class TestPackageExplosion:
 
         assert result.exit_code == 0
 
-        # Verify installed to .claude/skills/<user>/toolkit/myskill/
-        installed = tmp_path / ".claude" / "skills" / "local" / "toolkit" / "myskill" / "SKILL.md"
+        # Verify installed to .claude/skills/<flattened_name>/
+        # Package skills use flattened names: local:toolkit:myskill
+        installed = tmp_path / ".claude" / "skills" / "local:toolkit:myskill" / "SKILL.md"
         assert installed.exists()
 
         # Verify NOT installed to old .claude/packages/ path
@@ -353,12 +354,14 @@ class TestAddNamespace:
         result = runner.invoke(app, ["add", "./my-namespace"])
 
         assert result.exit_code == 0
-        assert "skill-a" in result.output
-        assert "skill-b" in result.output
+        # Output now shows flattened names
+        assert "local:my-namespace:skill-a" in result.output
+        assert "local:my-namespace:skill-b" in result.output
 
-        # Verify installed to .claude/skills/<user>/<namespace>/<skill>/
+        # Verify installed to .claude/skills/<flattened_name>/
+        # Namespace skills use flattened names: local:my-namespace:skill-a
         for name in ["skill-a", "skill-b"]:
-            installed = tmp_path / ".claude" / "skills" / "local" / "my-namespace" / name / "SKILL.md"
+            installed = tmp_path / ".claude" / "skills" / f"local:my-namespace:{name}" / "SKILL.md"
             assert installed.exists()
 
 

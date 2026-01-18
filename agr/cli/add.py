@@ -12,6 +12,7 @@ from agr.cli.common import handle_add_bundle, handle_add_resource, handle_add_un
 from agr.config import Dependency, get_or_create_config
 from agr.fetcher import ResourceType
 from agr.github import get_username_from_git_remote
+from agr.utils import compute_flattened_skill_name, compute_path_segments_from_skill_path, update_skill_md_name
 
 console = Console()
 
@@ -138,7 +139,8 @@ def handle_add_namespace(
     """Add all skills from a namespace directory recursively.
 
     A namespace is a directory containing multiple skill subdirectories.
-    Skills are discovered recursively and installed to .claude/skills/<user>/<namespace>/<relative-path>/
+    Skills are discovered recursively and installed with flattened colon-namespaced
+    directory names for Claude Code discoverability.
 
     Args:
         namespace_path: Path to the namespace directory
@@ -171,14 +173,21 @@ def handle_add_namespace(
         # then rel_to_namespace is "product/flywheel"
         rel_to_namespace = skill_dir.relative_to(namespace_path)
 
-        # Install to .claude/skills/<user>/<namespace>/<relative-path>/
-        dest_path = base_path / "skills" / username / namespace_name / rel_to_namespace
+        # Build path segments: [namespace_name, ...rel_to_namespace parts]
+        segments = [namespace_name] + list(rel_to_namespace.parts)
+        flattened_name = compute_flattened_skill_name(username, segments)
+
+        # Install to .claude/skills/<flattened_name>/
+        dest_path = base_path / "skills" / flattened_name
         dest_path.parent.mkdir(parents=True, exist_ok=True)
         if dest_path.exists():
             shutil.rmtree(dest_path)
         shutil.copytree(skill_dir, dest_path)
 
-        console.print(f"[green]Added skill '{namespace_name}/{rel_to_namespace}'[/green]")
+        # Update SKILL.md name field
+        update_skill_md_name(dest_path, flattened_name)
+
+        console.print(f"[green]Added skill '{flattened_name}'[/green]")
         added_count += 1
 
     config.save(config_path)
@@ -201,10 +210,11 @@ def _explode_package(
     package_name: str,
     base_path: Path,
 ) -> dict[str, int]:
-    """Install package contents to .claude/<type>/<user>/<pkg>/<resource>.
+    """Install package contents to .claude/<type>/<flattened_name>.
 
     "Explodes" a package by installing its contents to the appropriate
-    type directories instead of keeping them bundled.
+    type directories with flattened colon-namespaced directory names
+    for Claude Code discoverability.
 
     Args:
         package_path: Path to the package directory
@@ -217,19 +227,22 @@ def _explode_package(
     """
     counts = {"skills": 0, "commands": 0, "agents": 0}
 
-    # Skills
+    # Skills - use flattened names
     skills_dir = package_path / "skills"
     if skills_dir.is_dir():
         for skill in skills_dir.iterdir():
             if skill.is_dir() and (skill / "SKILL.md").exists():
-                dest = base_path / "skills" / username / package_name / skill.name
+                flattened_name = compute_flattened_skill_name(username, [package_name, skill.name])
+                dest = base_path / "skills" / flattened_name
                 dest.parent.mkdir(parents=True, exist_ok=True)
                 if dest.exists():
                     shutil.rmtree(dest)
                 shutil.copytree(skill, dest)
+                # Update SKILL.md name field
+                update_skill_md_name(dest, flattened_name)
                 counts["skills"] += 1
 
-    # Commands
+    # Commands - keep existing structure (not affected by Claude Code discovery issue)
     cmds_dir = package_path / "commands"
     if cmds_dir.is_dir():
         for cmd in cmds_dir.glob("*.md"):
@@ -238,7 +251,7 @@ def _explode_package(
             shutil.copy2(cmd, dest)
             counts["commands"] += 1
 
-    # Agents
+    # Agents - keep existing structure (not affected by Claude Code discovery issue)
     agents_dir = package_path / "agents"
     if agents_dir.is_dir():
         for agent in agents_dir.glob("*.md"):
@@ -255,7 +268,7 @@ def _install_local_resource(
     resource_type: str,
     username: str,
     base_path: Path,
-) -> None:
+) -> str:
     """Install a local resource to .claude/ directory.
 
     Args:
@@ -263,11 +276,14 @@ def _install_local_resource(
         resource_type: Type of resource (skill, command, agent, package)
         username: Username for namespacing
         base_path: Base .claude/ path
+
+    Returns:
+        The installed resource name (flattened for skills)
     """
     # Handle package explosion
     if resource_type == "package":
         counts = _explode_package(source_path, username, source_path.name, base_path)
-        return  # Package is exploded to type directories
+        return source_path.name  # Package is exploded to type directories
 
     type_to_subdir = {
         "skill": "skills",
@@ -277,9 +293,11 @@ def _install_local_resource(
     subdir = type_to_subdir.get(resource_type, "skills")
 
     if resource_type == "skill":
-        # Skills are directories
-        name = source_path.name
-        dest_path = base_path / subdir / username / name
+        # Skills use flattened colon-namespaced directory names
+        path_segments = compute_path_segments_from_skill_path(source_path)
+        flattened_name = compute_flattened_skill_name(username, path_segments)
+        dest_path = base_path / subdir / flattened_name
+        name = flattened_name
     else:
         # Commands and agents are files
         name = source_path.stem
@@ -298,8 +316,13 @@ def _install_local_resource(
     # Copy resource
     if source_path.is_dir():
         shutil.copytree(source_path, dest_path)
+        # Update SKILL.md name field for skills
+        if resource_type == "skill":
+            update_skill_md_name(dest_path, flattened_name)
     else:
         shutil.copy2(source_path, dest_path)
+
+    return name
 
 
 def handle_add_local(
@@ -371,13 +394,17 @@ def handle_add_local(
 
     # Install to .claude/
     base_path = get_base_path(global_install)
-    _install_local_resource(path, resource_type, username, base_path)
+    installed_name = _install_local_resource(path, resource_type, username, base_path)
 
     console.print(f"[green]Added local {resource_type} '{name}'[/green]")
     console.print(f"  path: {local_path}")
     if workspace:
         console.print(f"  workspace: {workspace}")
-    console.print(f"  installed to: .claude/{resource_type}s/{username}/{name}")
+    # Skills use flattened names, commands/agents use nested paths
+    if resource_type == "skill":
+        console.print(f"  installed to: .claude/{resource_type}s/{installed_name}")
+    else:
+        console.print(f"  installed to: .claude/{resource_type}s/{username}/{name}")
 
 
 def handle_add_directory(
@@ -416,8 +443,8 @@ def handle_add_directory(
             config.add_to_workspace(workspace, dep)
         else:
             config.add_local(rel_path, "skill")
-        _install_local_resource(skill_dir, "skill", username, base_path)
-        console.print(f"[green]Added skill '{skill_dir.name}'[/green]")
+        installed_name = _install_local_resource(skill_dir, "skill", username, base_path)
+        console.print(f"[green]Added skill '{installed_name}'[/green]")
         added_count += 1
 
     # Collect all skill directories to exclude their .md files
@@ -507,10 +534,11 @@ def handle_add_glob(
         config.add_local(path_str, detected_type)
 
         # Install to .claude/
-        _install_local_resource(path, detected_type, username, base_path)
+        installed_name = _install_local_resource(path, detected_type, username, base_path)
 
-        name = path.stem if path.is_file() else path.name
-        console.print(f"[green]Added {detected_type} '{name}'[/green]")
+        # Use flattened name for skills, original name for others
+        display_name = installed_name if detected_type == "skill" else (path.stem if path.is_file() else path.name)
+        console.print(f"[green]Added {detected_type} '{display_name}'[/green]")
         added_count += 1
 
     # Save config

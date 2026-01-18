@@ -75,8 +75,8 @@ class TestSyncCommand:
         config.add_remote("kasperjunge/commit", "skill")
         config.save(tmp_path / "agr.toml")
 
-        # Create already installed skill in namespaced path
-        skill_dir = tmp_path / ".claude" / "skills" / "kasperjunge" / "commit"
+        # Create already installed skill with flattened namespaced path
+        skill_dir = tmp_path / ".claude" / "skills" / "kasperjunge:commit"
         skill_dir.mkdir(parents=True)
         (skill_dir / "SKILL.md").write_text("# Commit Skill")
 
@@ -97,13 +97,13 @@ class TestSyncCommand:
         config.add_remote("kasperjunge/commit", "skill")
         config.save(tmp_path / "agr.toml")
 
-        # Create installed skill that IS in toml
-        skill_in_toml = tmp_path / ".claude" / "skills" / "kasperjunge" / "commit"
+        # Create installed skill that IS in toml (using flattened name)
+        skill_in_toml = tmp_path / ".claude" / "skills" / "kasperjunge:commit"
         skill_in_toml.mkdir(parents=True)
         (skill_in_toml / "SKILL.md").write_text("# Commit Skill")
 
-        # Create installed skill that is NOT in toml
-        skill_not_in_toml = tmp_path / ".claude" / "skills" / "alice" / "old-skill"
+        # Create installed skill that is NOT in toml (using flattened name)
+        skill_not_in_toml = tmp_path / ".claude" / "skills" / "alice:old-skill"
         skill_not_in_toml.mkdir(parents=True)
         (skill_not_in_toml / "SKILL.md").write_text("# Old Skill")
 

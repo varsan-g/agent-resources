@@ -84,8 +84,8 @@ class TestFetchResourceNamespaced:
             username="kasperjunge",
         )
 
-        # Verify installed to namespaced path
-        expected = dest_base / "kasperjunge" / "commit"
+        # Verify installed to flattened namespaced path
+        expected = dest_base / "kasperjunge:commit"
         assert result == expected
         assert expected.exists()
         assert (expected / "SKILL.md").exists()

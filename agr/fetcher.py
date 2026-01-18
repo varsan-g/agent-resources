@@ -18,6 +18,7 @@ from agr.exceptions import (
     ResourceExistsError,
     ResourceNotFoundError,
 )
+from agr.utils import compute_flattened_skill_name, update_skill_md_name
 
 
 class ResourceType(Enum):
@@ -281,7 +282,8 @@ def fetch_resource_from_repo_dir(
         resource_type: Type of resource
         overwrite: Whether to overwrite existing resource
         username: GitHub username for namespaced installation (e.g., "kasperjunge")
-                  When provided, installs to dest/username/name/ instead of dest/name/
+                  When provided, installs to dest/<flattened_name>/ for skills,
+                  or dest/username/name/ for commands/agents.
 
     Returns:
         Path to the installed resource
@@ -292,9 +294,14 @@ def fetch_resource_from_repo_dir(
     """
     config = RESOURCE_CONFIGS[resource_type]
 
-    # Build destination path - namespaced if username provided
-    if username:
-        # Namespaced path: .claude/skills/username/name/
+    # Build destination path - skills use flattened colon-namespaced names
+    if username and config.is_directory:
+        # Skills: .claude/skills/<flattened_name>/
+        # e.g., .claude/skills/kasperjunge:commit/ or .claude/skills/kasperjunge:product:growth-hacker/
+        flattened_name = compute_flattened_skill_name(username, path_segments)
+        resource_dest = dest / flattened_name
+    elif username:
+        # Commands/agents: .claude/commands/username/name.md
         namespaced_dest = dest / username
         resource_dest = _build_resource_path(namespaced_dest, config, path_segments)
     else:
@@ -335,6 +342,10 @@ def fetch_resource_from_repo_dir(
     # Copy resource to destination
     if config.is_directory:
         shutil.copytree(resource_source, resource_dest)
+        # Update SKILL.md name field for skills
+        if username:
+            flattened_name = compute_flattened_skill_name(username, path_segments)
+            update_skill_md_name(resource_dest, flattened_name)
     else:
         shutil.copy2(resource_source, resource_dest)
 
@@ -426,8 +437,9 @@ def fetch_resource(
         dest: Destination directory (e.g., .claude/skills/, .claude/commands/)
         resource_type: Type of resource (SKILL, COMMAND, or AGENT)
         overwrite: Whether to overwrite existing resource
-        username: GitHub username for namespaced installation (when provided,
-                  installs to dest/username/name/ instead of dest/name/)
+        username: GitHub username for namespaced installation. When provided,
+                  installs to dest/<flattened_name>/ for skills,
+                  or dest/username/name/ for commands/agents.
 
     Returns:
         Path to the installed resource
@@ -439,8 +451,13 @@ def fetch_resource(
     """
     config = RESOURCE_CONFIGS[resource_type]
 
-    # Build destination path - namespaced if username provided
-    if username:
+    # Build destination path - skills use flattened colon-namespaced names
+    if username and config.is_directory:
+        # Skills: .claude/skills/<flattened_name>/
+        flattened_name = compute_flattened_skill_name(username, path_segments)
+        resource_dest = dest / flattened_name
+    elif username:
+        # Commands/agents: .claude/commands/username/name.md
         namespaced_dest = dest / username
         resource_dest = _build_resource_path(namespaced_dest, config, path_segments)
     else:
@@ -488,6 +505,10 @@ def fetch_resource(
         # Copy resource to destination
         if config.is_directory:
             shutil.copytree(resource_source, resource_dest)
+            # Update SKILL.md name field for skills
+            if username:
+                flattened_name = compute_flattened_skill_name(username, path_segments)
+                update_skill_md_name(resource_dest, flattened_name)
         else:
             shutil.copy2(resource_source, resource_dest)
 
