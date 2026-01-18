@@ -1,259 +1,177 @@
 <div align="center">
 
-# 🧩 agent-resources
+# 🧩 agent-resources (agr)
 
-**Share and install Claude Code skills, commands, and agents with a single command.**
+**A package and project manager for Claude Code.**
 
-*A package manager for AI agents.*
+Install skills, commands, and subagents from GitHub with a single command.
 
 [![PyPI](https://img.shields.io/pypi/v/agr?color=blue)](https://pypi.org/project/agr/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-
-[Quick Start](#quick-start) • [Dependency Tracking](#dependency-tracking) • [Create Your Own](#create-your-own) • [Community](#community-resources)
 
 </div>
 
 ---
 
-## Quick Start
+## Highlights
 
-No installation needed. Just run:
+- **One command installs agent skills from GitHub**: `agr add user/skill` — no manual file copying to `.claude/`
+- **Try before you install**: `agrx user/skill` runs temporarily, then cleans up
+- **Team reproducibility**: `agr.toml` tracks dependencies; `agr sync` installs everything
+- **Auto-detects resource type**: Skills, commands, subagents — agr figures it out
+- **Build your personal library**: Create a GitHub repo of your best skills and share them with anyone
+- **Bundle related resources**: Package skills, commands, and subagents together for easy distribution
+- **Stop editing `.claude/` directly**: Treat it like `.venv/` — let agr manage it, you manage source files
+
+---
+
+## Installation
+
+No installation needed — run directly:
 
 ```bash
 uvx agr add kasperjunge/hello-world
 ```
 
-**That's it.** The skill is now available in Claude Code. The resource type (skill, command, agent) is auto-detected.
-
 Or install permanently:
 
 ```bash
 pip install agr
-agr add kasperjunge/hello-world
 ```
 
 ---
 
-## Install Any Resource
+## Quick Start
+
+### Install a resource
 
 ```bash
-agr add <username>/<name>                # Auto-detects resource type
-agr add <username>/<name> --type skill   # Explicit type (if needed)
-agr add <username>/<repo>/<name>         # From a custom repository
+agr add kasperjunge/commit         # Semantic commit messages
+agr add dsjacobsen/golang-pro      # Go development toolkit
 ```
 
-Resources install to organized namespaced paths:
+Done. The resource is now available in Claude Code.
 
-```
-.claude/
-└── skills/
-    └── kasperjunge/           # Organized by username
-        └── hello-world/
-```
-
-This prevents naming conflicts and keeps your resources organized.
-
----
-
-## Dependency Tracking
-
-**New in v0.4.0:** Track your project's resources with `agr.toml`.
-
-### The agr.toml File
-
-When you add resources, agr automatically tracks them in `agr.toml`:
-
-```toml
-[dependencies]
-"kasperjunge/hello-world" = {}
-"madsnorgaard/drupal-expert" = { type = "skill" }
-"acme/tools/review" = { type = "command" }
-```
-
-This file is lightweight, human-readable, and perfect for version control.
-
-### Sync Your Resources
-
-Set up a new machine or share your project? One command installs everything:
+**Handle format:** `username/repo/resource` — if the repo is named `agent-resources`, omit it: `username/resource`
 
 ```bash
-agr sync
+agr add alice/agent-resources/my-skill   # Full path
+agr add alice/my-skill                   # Same thing (agent-resources is default)
+agr add alice/my-repo/my-skill           # From a different repo
+agr add alice/toolkit/nested/skill       # Nested resource: toolkit/nested/skill
 ```
 
-This reads `agr.toml` and installs any missing resources.
-
-
-### Workflow
+### Try without installing
 
 ```bash
-# Add resources (automatically tracked in agr.toml)
-agr add kasperjunge/hello-world
-agr add madsnorgaard/drupal-expert
-
-# Commit agr.toml to version control
-git add agr.toml && git commit -m "Add agent dependencies"
-
-# On another machine, sync everything
-agr sync
-```
-
----
-
-## Run Without Installing (agrx)
-
-Try a skill or command without permanent installation:
-
-```bash
-agrx kasperjunge/hello-world              # Auto-detects and runs
-agrx kasperjunge/hello-world "my prompt"  # Run with a prompt
+agrx kasperjunge/hello-world              # Runs and cleans up
+agrx kasperjunge/hello-world "my prompt"  # With a prompt
 agrx kasperjunge/hello-world -i           # Interactive mode
 ```
 
-The resource is downloaded, executed, and cleaned up automatically.
+### Share with your team
+
+```bash
+# Your dependencies are tracked automatically
+cat agr.toml
+```
+
+```toml
+dependencies = [
+    {handle = "kasperjunge/commit", type = "skill"},
+    {handle = "dsjacobsen/golang-pro", type = "skill"},
+]
+```
+
+```bash
+# Teammates run one command
+agr sync
+```
 
 ---
 
-## Local Resource Authoring
+## Commands
 
-**New:** Author resources in convention paths and sync them to `.claude/`.
+| Command | What it does |
+|---------|-------------|
+| `agr add <handle>` | Install a resource |
+| `agr remove <name>` | Uninstall a resource |
+| `agr sync` | Install all dependencies from `agr.toml` |
+| `agr list` | Show installed resources |
+| `agr init` | Set up authoring directories |
+| `agr init skill <name>` | Create a new skill |
+| `agr init command <name>` | Create a new command |
+| `agr init agent <name>` | Create a new subagent |
+| `agrx <handle>` | Run a resource temporarily |
 
-### Set Up Authoring Structure
+---
+
+## Create Your Own
+
+### Set up your project
 
 ```bash
 agr init
 ```
 
-Creates the standard authoring directories:
+Creates the authoring structure:
 
 ```
-./
-├── skills/       # Your skills
-├── commands/     # Your commands
-├── agents/       # Your agents
-└── packages/     # Grouped resources
+skills/       # Your skills
+commands/     # Your commands
+agents/       # Your subagents
+packages/     # Grouped resources
 ```
 
-### Create Resources
+### Create a resource
 
 ```bash
 agr init skill my-skill       # Creates skills/my-skill/SKILL.md
 agr init command deploy       # Creates commands/deploy.md
 agr init agent reviewer       # Creates agents/reviewer.md
-agr init package my-toolkit   # Creates packages/my-toolkit/
 ```
 
-### Sync to .claude/
+### Sync to Claude Code
 
 ```bash
 agr sync
 ```
 
-Copies your resources to `.claude/{type}/{username}/` where Claude Code can use them. Your Git remote determines the username namespace.
+Your resources are now available in Claude Code.
 
-### Benefits
+### Share with the world
 
-- **Clean separation** — Source files in convention paths, installed files in `.claude/`
-- **Automatic namespacing** — Resources are organized by your GitHub username
-- **Incremental updates** — Only changed files are synced
-- **Prune support** — `agr sync --prune` removes resources you've deleted
-
----
-
-## Create a Shareable Repository
-
-Create your personal agent-resources library:
+Push to GitHub. Others can install with:
 
 ```bash
-agr init repo --github
+agr add your-username/my-skill
 ```
-
-**Done.** You now have a GitHub repo that anyone can install from.
-
-> Requires [GitHub CLI](https://cli.github.com/). Run without `--github` to set up manually.
-
-### What You Get
-
-- A ready-to-use `agent-resources` repo on your GitHub
-- Example skill, command, and agent to learn from
-- Instant shareability:
-
-```bash
-agr add <your-username>/hello-world
-```
-
-### Add Your Own Resources
-
-Author resources in convention paths:
-
-```
-your-username/agent-resources/
-├── skills/              # Your skills (synced to .claude/)
-│   └── hello-world/
-│       └── SKILL.md
-├── commands/            # Your commands
-│   └── hello.md
-├── agents/              # Your agents
-│   └── hello-agent.md
-└── packages/            # Grouped resources
-    └── my-toolkit/
-        ├── skills/
-        ├── commands/
-        └── agents/
-```
-
-Run `agr sync` to install them locally, then push to GitHub.
 
 ---
 
 ## Community Resources
 
-### Go Development Toolkit — [@dsjacobsen](https://github.com/dsjacobsen/agent-resources)
-
-A comprehensive Claude Code toolkit for Go developers.
+### Go Development — [@dsjacobsen](https://github.com/dsjacobsen/agent-resources)
 
 ```bash
-agr add dsjacobsen/golang-pro      # Expert Go knowledge
+agr add dsjacobsen/golang-pro      # Expert Go development
 agr add dsjacobsen/go-reviewer     # Code review agent
-agr add dsjacobsen/go-check        # Quick code check
 ```
 
-**Includes**: 1 skill, 9 agents, 11 commands covering scaffolding, testing, API building, refactoring, and more.
+1 skill, 9 agents, 11 commands for Go development.
 
-### Drupal Development Toolkit — [@madsnorgaard](https://github.com/madsnorgaard/agent-resources)
-
-A comprehensive Claude Code toolkit for Drupal developers.
+### Drupal Development — [@madsnorgaard](https://github.com/madsnorgaard/agent-resources)
 
 ```bash
-agr add madsnorgaard/drupal-expert      # Drupal 10/11 modules, themes, hooks
-agr add madsnorgaard/drupal-migration   # D7-to-D10 migrations, CSV imports
-agr add madsnorgaard/ddev-expert        # DDEV local development, Xdebug
-agr add madsnorgaard/drupal-reviewer    # Code review agent
-agr add madsnorgaard/drush-check        # Run health checks
+agr add madsnorgaard/drupal-expert      # Drupal 10/11 expertise
+agr add madsnorgaard/drupal-migration   # D7-to-D10 migrations
 ```
 
-**Includes**: 4 skills, 1 agent, 5 commands covering Drupal development, migrations, DDEV, Docker, security audits, and more.
+4 skills, 1 agent, 5 commands for Drupal development.
 
 ---
 
-**Built something useful?** [Open an issue](https://github.com/kasperjunge/agent-resources-project/issues) with a link to your `agent-resources` repo and we'll add it here.
-
----
-
-## Legacy Commands
-
-The following syntax is deprecated but still supported for backwards compatibility:
-
-```bash
-# Old subcommand syntax (deprecated)
-agr add skill <username>/<name>
-agr remove skill <name>
-agrx skill <username>/<name>
-
-# Use instead
-agr add <username>/<name>
-agr remove <name>
-agrx <username>/<name>
-```
+**Built something?** [Share it here](https://github.com/kasperjunge/agent-resources-project/issues).
 
 ---
 
