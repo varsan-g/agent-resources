@@ -1,5 +1,7 @@
 """Tests for centralized handle parsing and conversion module."""
 
+from pathlib import Path
+
 import pytest
 
 from agr.handle import (
@@ -241,3 +243,140 @@ class TestRoundTrip:
         toml = skill_dirname_to_toml_handle(original)
         back = toml_handle_to_skill_dirname(toml)
         assert back == original
+
+
+class TestParsedHandleToSkillPath:
+    """Test skill path building with flattened colon format."""
+
+    def test_with_username(self):
+        """Test skill path with username uses flattened colon format."""
+        handle = ParsedHandle(username="kasperjunge", name="seo", path_segments=["seo"])
+        result = handle.to_skill_path(Path(".claude"))
+        assert result == Path(".claude/skills/kasperjunge:seo")
+
+    def test_without_username(self):
+        """Test skill path without username uses simple name."""
+        handle = ParsedHandle(name="seo", path_segments=["seo"])
+        result = handle.to_skill_path(Path(".claude"))
+        assert result == Path(".claude/skills/seo")
+
+    def test_nested_path_segments(self):
+        """Test skill path with nested path segments."""
+        handle = ParsedHandle(
+            username="kasperjunge",
+            name="growth-hacker",
+            path_segments=["product-strategy", "growth-hacker"],
+        )
+        result = handle.to_skill_path(Path(".claude"))
+        assert result == Path(".claude/skills/kasperjunge:product-strategy:growth-hacker")
+
+    def test_with_absolute_base_path(self):
+        """Test skill path with absolute base path."""
+        handle = ParsedHandle(username="user", name="skill", path_segments=["skill"])
+        result = handle.to_skill_path(Path("/home/user/.claude"))
+        assert result == Path("/home/user/.claude/skills/user:skill")
+
+
+class TestParsedHandleToCommandPath:
+    """Test command path building with nested format."""
+
+    def test_with_username(self):
+        """Test command path with username uses nested format."""
+        handle = ParsedHandle(username="kasperjunge", name="commit", path_segments=["commit"])
+        result = handle.to_command_path(Path(".claude"))
+        assert result == Path(".claude/commands/kasperjunge/commit.md")
+
+    def test_without_username(self):
+        """Test command path without username uses flat format."""
+        handle = ParsedHandle(name="commit", path_segments=["commit"])
+        result = handle.to_command_path(Path(".claude"))
+        assert result == Path(".claude/commands/commit.md")
+
+    def test_uses_simple_name(self):
+        """Test command path uses simple_name for nested segments."""
+        handle = ParsedHandle(
+            username="user",
+            name="ignored",
+            path_segments=["nested", "actual"],
+        )
+        result = handle.to_command_path(Path(".claude"))
+        assert result == Path(".claude/commands/user/actual.md")
+
+
+class TestParsedHandleToAgentPath:
+    """Test agent path building with nested format."""
+
+    def test_with_username(self):
+        """Test agent path with username uses nested format."""
+        handle = ParsedHandle(username="kasperjunge", name="reviewer", path_segments=["reviewer"])
+        result = handle.to_agent_path(Path(".claude"))
+        assert result == Path(".claude/agents/kasperjunge/reviewer.md")
+
+    def test_without_username(self):
+        """Test agent path without username uses flat format."""
+        handle = ParsedHandle(name="reviewer", path_segments=["reviewer"])
+        result = handle.to_agent_path(Path(".claude"))
+        assert result == Path(".claude/agents/reviewer.md")
+
+
+class TestParsedHandleToResourcePath:
+    """Test resource path dispatch by type."""
+
+    def test_skill_type(self):
+        """Test resource path for skill type."""
+        handle = ParsedHandle(username="user", name="skill", path_segments=["skill"])
+        result = handle.to_resource_path(Path(".claude"), "skill")
+        assert result == Path(".claude/skills/user:skill")
+
+    def test_command_type(self):
+        """Test resource path for command type."""
+        handle = ParsedHandle(username="user", name="cmd", path_segments=["cmd"])
+        result = handle.to_resource_path(Path(".claude"), "command")
+        assert result == Path(".claude/commands/user/cmd.md")
+
+    def test_agent_type(self):
+        """Test resource path for agent type."""
+        handle = ParsedHandle(username="user", name="agent", path_segments=["agent"])
+        result = handle.to_resource_path(Path(".claude"), "agent")
+        assert result == Path(".claude/agents/user/agent.md")
+
+    def test_unknown_type_raises(self):
+        """Test that unknown type raises ValueError."""
+        handle = ParsedHandle(username="user", name="res", path_segments=["res"])
+        with pytest.raises(ValueError, match="Unknown resource type"):
+            handle.to_resource_path(Path(".claude"), "unknown")
+
+
+class TestParsedHandleFromComponents:
+    """Test factory method for creating ParsedHandle."""
+
+    def test_basic_components(self):
+        """Test creating handle from basic components."""
+        handle = ParsedHandle.from_components("kasperjunge", "seo")
+        assert handle.username == "kasperjunge"
+        assert handle.name == "seo"
+        assert handle.path_segments == ["seo"]
+        assert handle.repo is None
+
+    def test_with_path_segments(self):
+        """Test creating handle with explicit path segments."""
+        handle = ParsedHandle.from_components(
+            "user", "name", path_segments=["nested", "name"]
+        )
+        assert handle.username == "user"
+        assert handle.name == "name"
+        assert handle.path_segments == ["nested", "name"]
+
+    def test_with_repo(self):
+        """Test creating handle with repo."""
+        handle = ParsedHandle.from_components("user", "cmd", repo="custom-repo")
+        assert handle.username == "user"
+        assert handle.name == "cmd"
+        assert handle.repo == "custom-repo"
+        assert handle.path_segments == ["cmd"]
+
+    def test_path_building_round_trip(self):
+        """Test that from_components produces correct paths."""
+        handle = ParsedHandle.from_components("kasperjunge", "commit")
+        assert handle.to_skill_path(Path(".claude")) == Path(".claude/skills/kasperjunge:commit")
+        assert handle.to_command_path(Path(".claude")) == Path(".claude/commands/kasperjunge/commit.md")

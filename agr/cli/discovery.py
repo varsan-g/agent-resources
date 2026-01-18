@@ -57,9 +57,10 @@ def _discover_in_namespace(
     Skills use flattened colon format (e.g., "kasperjunge:seo").
     Commands and agents use nested format (e.g., "username/name.md").
     """
+    handle = ParsedHandle.from_components(username, name)
+
     # Check for skill (flattened colon format)
-    flattened_skill_name = f"{username}:{name}"
-    skill_path = base_path / "skills" / flattened_skill_name
+    skill_path = handle.to_skill_path(base_path)
     if skill_path.is_dir() and (skill_path / "SKILL.md").exists():
         result.resources.append(
             DiscoveredResource(
@@ -83,7 +84,7 @@ def _discover_in_namespace(
             )
 
     # Check for command (nested format)
-    command_path = base_path / "commands" / username / f"{name}.md"
+    command_path = handle.to_command_path(base_path)
     if command_path.is_file():
         result.resources.append(
             DiscoveredResource(
@@ -95,7 +96,7 @@ def _discover_in_namespace(
         )
 
     # Check for agent (nested format)
-    agent_path = base_path / "agents" / username / f"{name}.md"
+    agent_path = handle.to_agent_path(base_path)
     if agent_path.is_file():
         result.resources.append(
             DiscoveredResource(
@@ -201,8 +202,11 @@ def _discover_in_flat_path(
     result: DiscoveryResult,
 ) -> None:
     """Discover resources in flat (non-namespaced) paths for backward compat."""
+    # Use ParsedHandle without username for flat paths
+    handle = ParsedHandle(name=name, path_segments=[name])
+
     # Check for skill (directory with SKILL.md)
-    skill_path = base_path / "skills" / name
+    skill_path = handle.to_skill_path(base_path)
     if skill_path.is_dir() and (skill_path / "SKILL.md").exists():
         result.resources.append(
             DiscoveredResource(
@@ -214,7 +218,7 @@ def _discover_in_flat_path(
         )
 
     # Check for command (markdown file)
-    command_path = base_path / "commands" / f"{name}.md"
+    command_path = handle.to_command_path(base_path)
     if command_path.is_file():
         result.resources.append(
             DiscoveredResource(
@@ -226,7 +230,7 @@ def _discover_in_flat_path(
         )
 
     # Check for agent (markdown file)
-    agent_path = base_path / "agents" / f"{name}.md"
+    agent_path = handle.to_agent_path(base_path)
     if agent_path.is_file():
         result.resources.append(
             DiscoveredResource(

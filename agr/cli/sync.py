@@ -17,6 +17,7 @@ from agr.cli.common import (
     find_repo_root,
     get_base_path,
 )
+from agr.cli.paths import remove_path
 from agr.utils import compute_flattened_skill_name, compute_path_segments_from_skill_path, update_skill_md_name
 
 app = typer.Typer()
@@ -51,17 +52,18 @@ def _is_resource_installed(
     base_path: Path,
 ) -> bool:
     """Check if a resource is installed at the namespaced path."""
+    from agr.handle import ParsedHandle
+
     config = RESOURCE_CONFIGS[resource_type]
+    handle = ParsedHandle.from_components(username, name)
 
     if config.is_directory:
         # Skills: .claude/skills/<flattened_name>/SKILL.md
-        # where flattened_name = username:name (e.g., kasperjunge:commit)
-        flattened_name = compute_flattened_skill_name(username, [name])
-        resource_path = base_path / config.dest_subdir / flattened_name
+        resource_path = handle.to_skill_path(base_path)
         return resource_path.is_dir() and (resource_path / "SKILL.md").exists()
     else:
         # Commands/Agents: .claude/commands/username/name.md
-        resource_path = base_path / config.dest_subdir / username / f"{name}.md"
+        resource_path = handle.to_resource_path(base_path, resource_type.value)
         return resource_path.is_file()
 
 
@@ -115,29 +117,10 @@ def _discover_installed_namespaced_resources(
     return installed
 
 
-def _cleanup_empty_parent(path: Path) -> None:
-    """Remove the parent directory if it's empty."""
-    parent = path.parent
-    if parent.exists() and not any(parent.iterdir()):
-        parent.rmdir()
-
-
-def _remove_path(path: Path) -> None:
-    """Remove a file or directory and clean up empty parent."""
-    if path.is_dir():
-        shutil.rmtree(path)
-    elif path.is_file():
-        path.unlink()
-    else:
-        return
-    _cleanup_empty_parent(path)
-
-
 def _remove_namespaced_resource(username: str, name: str, base_path: Path) -> None:
     """Remove a namespaced resource from disk.
 
-    For skills, uses centralized handle module for consistent conversion
-    from toml format (slash) to filesystem format (colon).
+    Uses ParsedHandle for consistent path building across resource types.
     For example, username="kasperjunge", name="commit"
     will remove ".claude/skills/kasperjunge:commit/".
 
@@ -146,24 +129,18 @@ def _remove_namespaced_resource(username: str, name: str, base_path: Path) -> No
         name: Resource name (may contain "/" for nested paths)
         base_path: Base .claude directory path
     """
-    from agr.handle import toml_handle_to_skill_dirname
+    from agr.handle import ParsedHandle
 
-    # Build the full toml handle and convert to skill dirname
-    toml_handle = f"{username}/{name}"
-    skill_dirname = toml_handle_to_skill_dirname(toml_handle)
-
-    # Try each resource type in order
+    handle = ParsedHandle.from_components(username, name)
     paths_to_try = [
-        # Skills use flattened colon names
-        base_path / "skills" / skill_dirname,
-        # Commands/agents use nested paths
-        base_path / "commands" / username / f"{name}.md",
-        base_path / "agents" / username / f"{name}.md",
+        handle.to_skill_path(base_path),
+        handle.to_command_path(base_path),
+        handle.to_agent_path(base_path),
     ]
 
     for path in paths_to_try:
         if path.exists():
-            _remove_path(path)
+            remove_path(path)
             return
 
 

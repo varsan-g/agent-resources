@@ -14,6 +14,8 @@ from agr.cli.paths import (
     get_destination,
     get_namespaced_destination,
     fetch_spinner,
+    cleanup_empty_parent,
+    remove_path,
 )
 
 # Re-export from discovery module
@@ -60,6 +62,8 @@ __all__ = [
     "get_destination",
     "get_namespaced_destination",
     "fetch_spinner",
+    "cleanup_empty_parent",
+    "remove_path",
     # discovery
     "discover_local_resource_type",
     "discover_runnable_resource",

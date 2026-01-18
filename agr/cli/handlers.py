@@ -172,19 +172,16 @@ def _get_namespaced_resource_path(
         path_segments: Optional full path segments for nested skills
                        e.g., ["product-strategy", "growth-hacker"]
     """
-    dest = get_destination(resource_subdir, global_install)
-    if resource_subdir == "skills":
-        # Skills use flattened colon format: skills/username:path:segments
-        if path_segments and len(path_segments) > 1:
-            # Nested skill - use full path segments
-            flattened_name = f"{username}:{':'.join(path_segments)}"
-        else:
-            # Simple skill - just username:name
-            flattened_name = f"{username}:{name}"
-        return dest / flattened_name
-    else:
-        # Commands and agents use nested format
-        return dest / username / f"{name}.md"
+    from agr.handle import ParsedHandle
+
+    base_path = get_base_path(global_install)
+    handle = ParsedHandle.from_components(username, name, path_segments)
+
+    # Map resource_subdir to resource type
+    subdir_to_type = {"skills": "skill", "commands": "command", "agents": "agent"}
+    resource_type = subdir_to_type.get(resource_subdir, "skill")
+
+    return handle.to_resource_path(base_path, resource_type)
 
 
 def _remove_from_agr_toml(

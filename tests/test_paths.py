@@ -9,6 +9,7 @@ import typer
 from agr.cli.paths import (
     DEFAULT_REPO_NAME,
     TYPE_TO_SUBDIR,
+    cleanup_empty_parent,
     console,
     extract_type_from_args,
     find_repo_root,
@@ -18,6 +19,7 @@ from agr.cli.paths import (
     is_local_path,
     parse_nested_name,
     parse_resource_ref,
+    remove_path,
 )
 
 
@@ -298,3 +300,109 @@ class TestDefaultRepoName:
     def test_default_repo_name(self):
         """Test that default repo name is agent-resources."""
         assert DEFAULT_REPO_NAME == "agent-resources"
+
+
+class TestCleanupEmptyParent:
+    """Tests for cleanup_empty_parent utility."""
+
+    def test_removes_empty_parent(self, tmp_path):
+        """Test that empty parent directory is removed."""
+        parent = tmp_path / "parent"
+        parent.mkdir()
+        child = parent / "child.txt"
+        child.touch()
+        # Remove the child file
+        child.unlink()
+        # Now cleanup should remove the empty parent
+        cleanup_empty_parent(child)
+        assert not parent.exists()
+
+    def test_keeps_non_empty_parent(self, tmp_path):
+        """Test that non-empty parent directory is kept."""
+        parent = tmp_path / "parent"
+        parent.mkdir()
+        child1 = parent / "child1.txt"
+        child2 = parent / "child2.txt"
+        child1.touch()
+        child2.touch()
+        # Remove one child
+        child1.unlink()
+        # Cleanup should keep parent since it still has child2
+        cleanup_empty_parent(child1)
+        assert parent.exists()
+
+    def test_handles_nonexistent_parent(self, tmp_path):
+        """Test that nonexistent parent is handled gracefully."""
+        nonexistent = tmp_path / "does_not_exist" / "child.txt"
+        # Should not raise an error
+        cleanup_empty_parent(nonexistent)
+
+
+class TestRemovePath:
+    """Tests for remove_path utility."""
+
+    def test_removes_file(self, tmp_path):
+        """Test that files are removed."""
+        parent = tmp_path / "parent"
+        parent.mkdir()
+        file = parent / "file.txt"
+        file.touch()
+        remove_path(file)
+        assert not file.exists()
+
+    def test_removes_directory(self, tmp_path):
+        """Test that directories are removed recursively."""
+        parent = tmp_path / "parent"
+        parent.mkdir()
+        child_dir = parent / "child"
+        child_dir.mkdir()
+        child_file = child_dir / "file.txt"
+        child_file.touch()
+        # Add another file in parent so it's not empty after removal
+        other_file = parent / "other.txt"
+        other_file.touch()
+        remove_path(child_dir)
+        assert not child_dir.exists()
+        # Parent should still exist since it has other_file
+        assert parent.exists()
+        assert other_file.exists()
+
+    def test_cleans_empty_parent_after_file_removal(self, tmp_path):
+        """Test that empty parent is cleaned up after file removal."""
+        parent = tmp_path / "parent"
+        parent.mkdir()
+        file = parent / "only_file.txt"
+        file.touch()
+        remove_path(file)
+        assert not file.exists()
+        assert not parent.exists()
+
+    def test_cleans_empty_parent_after_dir_removal(self, tmp_path):
+        """Test that empty parent is cleaned up after directory removal."""
+        parent = tmp_path / "parent"
+        parent.mkdir()
+        child_dir = parent / "only_child"
+        child_dir.mkdir()
+        (child_dir / "file.txt").touch()
+        remove_path(child_dir)
+        assert not child_dir.exists()
+        assert not parent.exists()
+
+    def test_keeps_non_empty_parent(self, tmp_path):
+        """Test that non-empty parent is kept."""
+        parent = tmp_path / "parent"
+        parent.mkdir()
+        file1 = parent / "file1.txt"
+        file2 = parent / "file2.txt"
+        file1.touch()
+        file2.touch()
+        remove_path(file1)
+        assert not file1.exists()
+        assert parent.exists()
+        assert file2.exists()
+
+    def test_handles_nonexistent_path(self, tmp_path):
+        """Test that nonexistent paths are handled gracefully."""
+        nonexistent = tmp_path / "does_not_exist.txt"
+        # Should not raise an error
+        remove_path(nonexistent)

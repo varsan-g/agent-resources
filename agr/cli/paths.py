@@ -1,5 +1,6 @@
 """Path utilities for agr CLI commands."""
 
+import shutil
 from contextlib import contextmanager
 from pathlib import Path
 
@@ -213,3 +214,21 @@ def fetch_spinner():
     """Show spinner during fetch operation."""
     with Live(Spinner("dots", text="Fetching..."), console=console, transient=True):
         yield
+
+
+def cleanup_empty_parent(path: Path) -> None:
+    """Remove the parent directory if it's empty."""
+    parent = path.parent
+    if parent.exists() and not any(parent.iterdir()):
+        parent.rmdir()
+
+
+def remove_path(path: Path) -> None:
+    """Remove a file or directory and clean up empty parent."""
+    if path.is_dir():
+        shutil.rmtree(path)
+    elif path.is_file():
+        path.unlink()
+    else:
+        return
+    cleanup_empty_parent(path)

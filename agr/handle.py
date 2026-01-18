@@ -12,6 +12,7 @@ All code paths that need to parse or convert handles should use this module.
 """
 
 from dataclasses import dataclass, field
+from pathlib import Path
 
 
 @dataclass
@@ -102,6 +103,93 @@ class ParsedHandle:
             return self.username == other.username
 
         return True
+
+    def to_skill_path(self, base_path: Path) -> Path:
+        """Build skill path: base_path/skills/{username}:{segments} or base_path/skills/{name}.
+
+        Examples:
+            >>> ParsedHandle(username="kasperjunge", name="seo", path_segments=["seo"]).to_skill_path(Path(".claude"))
+            PosixPath('.claude/skills/kasperjunge:seo')
+            >>> ParsedHandle(name="seo", path_segments=["seo"]).to_skill_path(Path(".claude"))
+            PosixPath('.claude/skills/seo')
+        """
+        if not self.username:
+            return base_path / "skills" / self.name
+        return base_path / "skills" / self.to_skill_dirname()
+
+    def to_command_path(self, base_path: Path) -> Path:
+        """Build command path: base_path/commands/{username}/{name}.md or base_path/commands/{name}.md.
+
+        Examples:
+            >>> ParsedHandle(username="kasperjunge", name="commit", path_segments=["commit"]).to_command_path(Path(".claude"))
+            PosixPath('.claude/commands/kasperjunge/commit.md')
+            >>> ParsedHandle(name="commit", path_segments=["commit"]).to_command_path(Path(".claude"))
+            PosixPath('.claude/commands/commit.md')
+        """
+        if not self.username:
+            return base_path / "commands" / f"{self.simple_name}.md"
+        return base_path / "commands" / self.username / f"{self.simple_name}.md"
+
+    def to_agent_path(self, base_path: Path) -> Path:
+        """Build agent path: base_path/agents/{username}/{name}.md or base_path/agents/{name}.md.
+
+        Examples:
+            >>> ParsedHandle(username="kasperjunge", name="reviewer", path_segments=["reviewer"]).to_agent_path(Path(".claude"))
+            PosixPath('.claude/agents/kasperjunge/reviewer.md')
+            >>> ParsedHandle(name="reviewer", path_segments=["reviewer"]).to_agent_path(Path(".claude"))
+            PosixPath('.claude/agents/reviewer.md')
+        """
+        if not self.username:
+            return base_path / "agents" / f"{self.simple_name}.md"
+        return base_path / "agents" / self.username / f"{self.simple_name}.md"
+
+    def to_resource_path(self, base_path: Path, resource_type: str) -> Path:
+        """Build resource path based on type (skill, command, agent).
+
+        Args:
+            base_path: Base directory (e.g., Path(".claude"))
+            resource_type: One of "skill", "command", "agent"
+
+        Returns:
+            Path to the resource
+
+        Raises:
+            ValueError: If resource_type is not one of skill, command, agent
+        """
+        builders = {
+            "skill": self.to_skill_path,
+            "command": self.to_command_path,
+            "agent": self.to_agent_path,
+        }
+        if resource_type not in builders:
+            raise ValueError(f"Unknown resource type: {resource_type}")
+        return builders[resource_type](base_path)
+
+    @classmethod
+    def from_components(
+        cls,
+        username: str,
+        name: str,
+        path_segments: list[str] | None = None,
+        repo: str | None = None,
+    ) -> "ParsedHandle":
+        """Factory method for creating ParsedHandle from components.
+
+        Args:
+            username: GitHub username
+            name: Resource name
+            path_segments: Optional path segments (defaults to [name])
+            repo: Optional repository name
+
+        Returns:
+            ParsedHandle instance
+
+        Examples:
+            >>> ParsedHandle.from_components("kasperjunge", "seo")
+            ParsedHandle(username='kasperjunge', repo=None, name='seo', path_segments=['seo'])
+        """
+        segments = path_segments if path_segments is not None else [name]
+        return cls(username=username, repo=repo, name=name, path_segments=segments)
 
 
 def parse_handle(handle: str) -> ParsedHandle:
