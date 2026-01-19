@@ -11,10 +11,11 @@ Track your project's resources with `agr.toml` and sync them across machines.
 `agr.toml` is a lightweight manifest that declares your project's resource dependencies. It's automatically created and updated when you add or remove resources.
 
 ```toml
-[dependencies]
-"kasperjunge/hello-world" = {}
-"madsnorgaard/drupal-expert" = { type = "skill" }
-"acme/tools/review" = { type = "command" }
+dependencies = [
+    {handle = "kasperjunge/hello-world", type = "skill"},
+    {handle = "madsnorgaard/drupal-expert", type = "skill"},
+    {handle = "acme/tools/review", type = "command"},
+]
 ```
 
 ### Why use agr.toml?
@@ -35,8 +36,9 @@ agr add kasperjunge/hello-world
 Creates or updates `agr.toml`:
 
 ```toml
-[dependencies]
-"kasperjunge/hello-world" = {}
+dependencies = [
+    {handle = "kasperjunge/hello-world", type = "skill"},
+]
 ```
 
 When you remove a resource, agr removes it from `agr.toml`:
@@ -51,18 +53,19 @@ Dependencies use the same reference format as `agr add`:
 
 | Format | Example | Meaning |
 |--------|---------|---------|
-| `username/name` | `"kasperjunge/hello-world"` | From default `agent-resources` repo |
-| `username/repo/name` | `"acme/tools/review"` | From custom repo |
+| `username/name` | `kasperjunge/hello-world` | From default `agent-resources` repo |
+| `username/repo/name` | `acme/tools/review` | From custom repo |
 
 ## Specifying resource types
 
-By default, agr auto-detects resource types. You can make the type explicit:
+Resource types are specified in the dependency entry:
 
 ```toml
-[dependencies]
-"kasperjunge/hello-world" = { type = "skill" }
-"kasperjunge/review" = { type = "command" }
-"kasperjunge/expert" = { type = "agent" }
+dependencies = [
+    {handle = "kasperjunge/hello-world", type = "skill"},
+    {handle = "kasperjunge/review", type = "command"},
+    {handle = "kasperjunge/expert", type = "agent"},
+]
 ```
 
 Valid types: `skill`, `command`, `agent`
@@ -80,7 +83,7 @@ agr sync
 
 This syncs both:
 
-1. **Local authoring resources** — From `skills/`, `commands/`, `agents/`, `packages/`
+1. **Local authoring resources** — From `resources/skills/`, `resources/commands/`, `resources/agents/`
 2. **Remote dependencies** — From `agr.toml`
 
 Resources that are already installed are skipped.
@@ -110,7 +113,7 @@ agr sync --prune
 In addition to installing missing resources, this removes any namespaced resources that aren't listed in `agr.toml`.
 
 !!! note
-    Pruning only affects resources in namespaced paths (e.g., `.claude/skills/username/`). Resources installed with older versions of agr in flat paths (e.g., `.claude/skills/hello-world/`) are preserved for backward compatibility.
+    Pruning only affects resources in namespaced paths (e.g., `.claude/skills/username:skill/`). Resources installed with older versions of agr in flat paths (e.g., `.claude/skills/hello-world/`) are preserved for backward compatibility.
 
 ## Typical workflow
 

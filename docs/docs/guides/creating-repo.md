@@ -4,50 +4,87 @@ title: Creating a shareable repo
 
 # Creating a shareable repo
 
-Use `agr init repo` to scaffold a repository that others can install from.
+Create a repository that others can install resources from using `agr add`.
 
-## Create a new repository
-
-```bash
-agr init repo
-```
-
-This creates `./agent-resources/` with a starter `.claude/` structure and example resources.
-
-## Create in a specific location
+## Initialize your project
 
 ```bash
-agr init repo my-resources
-agr init repo .
+mkdir agent-resources
+cd agent-resources
+git init
+agr init
 ```
 
-- `my-resources` creates `./my-resources/`
-- `.` initializes the current directory
+This creates the standard authoring structure:
 
-## Create and push to GitHub
+```
+./
+├── agr.toml
+└── resources/
+    ├── skills/
+    ├── commands/
+    ├── agents/
+    └── packages/
+```
+
+## Create your resources
+
+Add skills, commands, and agents:
 
 ```bash
-agr init repo agent-resources --github
+agr init skill code-reviewer
+agr init command deploy
+agr init agent test-writer
 ```
 
-This uses the GitHub CLI (`gh`) to create a repo and push the initial commit.
-Make sure you have `gh auth login` configured.
+Edit the generated files to add your content.
+
+## Sync to .claude/
+
+Before publishing, sync your resources:
+
+```bash
+agr sync
+```
+
+This copies resources to `.claude/` where they can be discovered by consumers.
+
+## Push to GitHub
+
+```bash
+git add .
+git commit -m "Initial resources"
+gh repo create agent-resources --public --source=. --push
+```
+
+Or create the repo on GitHub first and push manually.
 
 ## Recommended repo name
 
-If the repository is named `agent-resources`, users can install with:
+If your repository is named `agent-resources`, users can install with the short form:
 
 ```bash
-agr add skill username/my-skill
+agr add username/my-skill
 ```
 
 If the repo has a different name, users must include it:
 
 ```bash
-agr add skill username/custom-repo/my-skill
+agr add username/custom-repo/my-skill
+```
+
+## Share with others
+
+Once published, share your resources:
+
+```bash
+# Others can install your resources
+agr add your-username/code-reviewer
+agr add your-username/deploy
 ```
 
 ## Next steps
 
-- Customize the resources in `.claude/`
-- Push to GitHub and share your username and resource names
+- Edit resources in `resources/` and run `agr sync` to update
+- Push changes to GitHub to share updates
+- See [Local resource authoring](local-authoring.md) for the full workflow

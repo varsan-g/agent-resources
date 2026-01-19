@@ -14,7 +14,7 @@ If a user has a repo named `agent-resources`, you only need the username:
 agr add username/my-resource
 ```
 
-The resource type (skill, command, agent, or bundle) is auto-detected.
+The resource type (skill, command, or agent) is auto-detected.
 
 ## Install from a custom repo name
 
@@ -26,14 +26,14 @@ agr add username/custom-repo/my-resource
 
 ## How resources are organized
 
-Resources install to namespaced paths organized by username:
+Resources install to namespaced paths:
 
 ```
 ./
 └── .claude/
     ├── skills/
-    │   └── username/
-    │       └── my-skill/
+    │   └── username:my-skill/
+    │       └── SKILL.md
     ├── commands/
     │   └── username/
     │       └── my-command.md
@@ -42,11 +42,13 @@ Resources install to namespaced paths organized by username:
             └── my-agent.md
 ```
 
+Skills use a flattened colon format (`username:skill-name`) because Claude Code only discovers top-level directories in `.claude/skills/`.
+
 This organization:
 
 - **Prevents naming conflicts** — Two authors can both have a resource named `review`
 - **Shows ownership** — You can see who created each resource
-- **Keeps things tidy** — Resources from the same author are grouped together
+- **Ensures discoverability** — Skills are at the top level where Claude Code can find them
 
 ## Install nested resources
 
@@ -84,15 +86,16 @@ agr add username/hello --type skill
 agr add username/hello --type command
 ```
 
-Valid types: `skill`, `command`, `agent`, `bundle`
+Valid types: `skill`, `command`, `agent`
 
 ## Automatic dependency tracking
 
 When you install a resource, agr automatically adds it to `agr.toml`:
 
 ```toml
-[dependencies]
-"username/my-resource" = {}
+dependencies = [
+    {handle = "username/my-resource", type = "skill"},
+]
 ```
 
 This lets you:

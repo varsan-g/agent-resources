@@ -31,7 +31,7 @@ pip install agr
 agr add kasperjunge/hello-world
 ```
 
-The resource type (skill, command, agent, or bundle) is auto-detected.
+The resource type (skill, command, or agent) is auto-detected.
 
 ## Where resources go
 
@@ -41,8 +41,8 @@ Resources install to organized, namespaced paths:
 ./
 └── .claude/
     ├── skills/
-    │   └── kasperjunge/
-    │       └── hello-world/
+    │   └── kasperjunge:hello-world/
+    │       └── SKILL.md
     ├── commands/
     │   └── kasperjunge/
     │       └── review.md
@@ -50,6 +50,8 @@ Resources install to organized, namespaced paths:
         └── kasperjunge/
             └── expert.md
 ```
+
+Skills use a flattened colon format (`username:skill-name`) for Claude Code discoverability.
 
 Or globally with `--global`:
 
@@ -61,12 +63,13 @@ Or globally with `--global`:
 
 ## Track your dependencies
 
-**New in v0.4.0:** agr automatically tracks resources in `agr.toml`:
+agr automatically tracks resources in `agr.toml`:
 
 ```toml
-[dependencies]
-"kasperjunge/hello-world" = {}
-"madsnorgaard/drupal-expert" = { type = "skill" }
+dependencies = [
+    {handle = "kasperjunge/hello-world", type = "skill"},
+    {handle = "madsnorgaard/drupal-expert", type = "skill"},
+]
 ```
 
 Sync your resources on any machine:
@@ -81,11 +84,13 @@ Resources are fetched from GitHub repositories that follow a simple layout:
 
 ```
 agent-resources/
-└── .claude/
+└── resources/
     ├── skills/
     ├── commands/
     └── agents/
 ```
+
+Or from the `.claude/` directory for backwards compatibility.
 
 By default, `agr add` looks in a repository named `agent-resources` on the user's GitHub account.
 If a repo has a different name, include it in the reference:

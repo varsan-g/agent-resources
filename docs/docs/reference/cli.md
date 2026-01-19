@@ -22,14 +22,13 @@ agr add <username>/<repo>/<name>
 agr add ./path/to/resource
 ```
 
-The resource type (skill, command, agent, or bundle) is automatically detected.
+The resource type (skill, command, or agent) is automatically detected.
 
 ### Options
 
-- `--type`, `-t`: Explicit resource type (`skill`, `command`, `agent`, `bundle`)
+- `--type`, `-t`: Explicit resource type (`skill`, `command`, `agent`)
 - `--global`, `-g`: Install to `~/.claude/` instead of the current directory
 - `--overwrite`: Replace an existing resource
-- `--to`: Add local resource to a package namespace (local paths only)
 
 ### Examples
 
@@ -43,28 +42,34 @@ agr add acme/tools/review --global
 # With explicit type (for disambiguation)
 agr add kasperjunge/hello --type skill
 
-# Nested paths
-agr add username/backend:hello-world
-
-# Bundles (auto-detected)
-agr add kasperjunge/anthropic
-
 # Add local path to agr.toml
-agr add ./custom/skill --type skill
+agr add ./resources/skills/my-skill --type skill
 
-# Add local resource to a package
-agr add ./scripts/deploy.md --type command --to my-toolkit
+# Add local command
+agr add ./resources/commands/deploy.md --type command
 ```
 
 ### Where resources go
 
-Resources install to namespaced paths organized by username:
+Resources install to namespaced paths using a flattened colon format:
 
 ```
 .claude/
 └── skills/
+    └── kasperjunge:hello-world/
+        └── SKILL.md
+```
+
+Commands and agents use nested directories:
+
+```
+.claude/
+├── commands/
+│   └── kasperjunge/
+│       └── review.md
+└── agents/
     └── kasperjunge/
-        └── hello-world/
+        └── expert.md
 ```
 
 ### Dependency tracking
@@ -72,8 +77,9 @@ Resources install to namespaced paths organized by username:
 When you add a resource, it's automatically recorded in `agr.toml`:
 
 ```toml
-[dependencies]
-"kasperjunge/hello-world" = {}
+dependencies = [
+    {handle = "kasperjunge/hello-world", type = "skill"},
+]
 ```
 
 ### Disambiguation
@@ -105,7 +111,7 @@ agr sync --global
 
 By default, `agr sync` syncs both:
 
-1. **Local authoring resources** — From `skills/`, `commands/`, `agents/`, `packages/`
+1. **Local authoring resources** — From `resources/skills/`, `resources/commands/`, `resources/agents/`
 2. **Remote dependencies** — From `agr.toml`
 
 ### Options
@@ -140,10 +146,9 @@ Discovers resources in convention paths and copies them to `.claude/`:
 
 | Source | Destination |
 |--------|-------------|
-| `skills/<name>/` | `.claude/skills/<username>/<name>/` |
-| `commands/<name>.md` | `.claude/commands/<username>/<name>.md` |
-| `agents/<name>.md` | `.claude/agents/<username>/<name>.md` |
-| `packages/<pkg>/skills/<name>/` | `.claude/skills/<username>/<pkg>/<name>/` |
+| `resources/skills/<name>/` | `.claude/skills/<username>:<name>/` |
+| `resources/commands/<name>.md` | `.claude/commands/<username>/<name>.md` |
+| `resources/agents/<name>.md` | `.claude/agents/<username>/<name>.md` |
 
 The username is determined from your git remote. If no remote exists, `local` is used.
 
@@ -167,33 +172,7 @@ Sync complete: 2 installed, 1 updated, 0 pruned
 ```
 
 !!! note
-    Pruning only affects resources in namespaced paths (e.g., `.claude/skills/username/`). Resources installed with older versions of agr in flat paths are preserved.
-
-## agr update
-
-Re-fetch resources from GitHub to get the latest version.
-
-### Commands
-
-```bash
-agr update skill <reference>
-agr update command <reference>
-agr update agent <reference>
-agr update bundle <reference>
-```
-
-### Options
-
-- `--global`, `-g`: Update in `~/.claude/` instead of the current directory
-
-### Examples
-
-```bash
-agr update skill kasperjunge/hello-world
-agr update command kasperjunge/my-repo/hello --global
-agr update agent kasperjunge/hello-agent
-agr update bundle kasperjunge/anthropic
-```
+    Pruning only affects resources in namespaced paths (e.g., `.claude/skills/username:skill/`). Resources installed with older versions of agr in flat paths are preserved.
 
 ## agr remove
 
@@ -210,7 +189,7 @@ Auto-detects the resource type from installed files.
 
 ### Options
 
-- `--type`, `-t`: Explicit resource type (`skill`, `command`, `agent`, `bundle`)
+- `--type`, `-t`: Explicit resource type (`skill`, `command`, `agent`)
 - `--global`, `-g`: Remove from `~/.claude/` instead of the current directory
 
 ### Examples
@@ -227,9 +206,6 @@ agr remove hello --type skill
 
 # Remove from global installation
 agr remove hello-world --global
-
-# Remove a bundle
-agr remove anthropic --type bundle
 ```
 
 ### Dependency tracking
@@ -302,7 +278,7 @@ Use --type to specify which one to run:
 
 ## agr init
 
-Create scaffolds for repositories and resources, or set up authoring structure.
+Create scaffolds for resources or set up authoring structure.
 
 ### Initialize authoring structure
 
@@ -310,28 +286,17 @@ Create scaffolds for repositories and resources, or set up authoring structure.
 agr init
 ```
 
-Creates the convention directories for local resource authoring:
+Creates `agr.toml` and the convention directories for local resource authoring:
 
 ```
 ./
-├── skills/
-├── commands/
-├── agents/
-└── packages/
+├── agr.toml
+└── resources/
+    ├── skills/
+    ├── commands/
+    ├── agents/
+    └── packages/
 ```
-
-### Create a repository
-
-```bash
-agr init repo
-agr init repo my-resources
-agr init repo .
-```
-
-Options:
-
-- `--path`, `-p`: Custom output path
-- `--github`, `-g`: Create a GitHub repo and push (requires `gh`)
 
 ### Create a skill
 
@@ -339,12 +304,12 @@ Options:
 agr init skill my-skill
 ```
 
-Creates `skills/my-skill/SKILL.md` by default.
+Creates `resources/skills/my-skill/SKILL.md` by default.
 
 Options:
 
 - `--path`, `-p`: Custom output path
-- `--legacy`: Create in `.claude/skills/` instead of `skills/`
+- `--legacy`: Create in `.claude/skills/` instead of `resources/skills/`
 
 ### Create a command
 
@@ -352,12 +317,12 @@ Options:
 agr init command my-command
 ```
 
-Creates `commands/my-command.md` by default.
+Creates `resources/commands/my-command.md` by default.
 
 Options:
 
 - `--path`, `-p`: Custom output path
-- `--legacy`: Create in `.claude/commands/` instead of `commands/`
+- `--legacy`: Create in `.claude/commands/` instead of `resources/commands/`
 
 ### Create an agent
 
@@ -365,12 +330,12 @@ Options:
 agr init agent my-agent
 ```
 
-Creates `agents/my-agent.md` by default.
+Creates `resources/agents/my-agent.md` by default.
 
 Options:
 
 - `--path`, `-p`: Custom output path
-- `--legacy`: Create in `.claude/agents/` instead of `agents/`
+- `--legacy`: Create in `.claude/agents/` instead of `resources/agents/`
 
 ### Create a package
 
@@ -378,7 +343,7 @@ Options:
 agr init package my-toolkit
 ```
 
-Creates `packages/my-toolkit/` with `skills/`, `commands/`, and `agents/` subdirectories.
+Creates `resources/packages/my-toolkit/` with `skills/`, `commands/`, and `agents/` subdirectories.
 
 Options:
 
@@ -393,12 +358,10 @@ The old subcommand syntax is deprecated but still works:
 agr add skill <username>/<name>
 agr add command <username>/<name>
 agr add agent <username>/<name>
-agr add bundle <username>/<name>
 
 agr remove skill <name>
 agr remove command <name>
 agr remove agent <name>
-agr remove bundle <name>
 
 agrx skill <username>/<name>
 agrx command <username>/<name>

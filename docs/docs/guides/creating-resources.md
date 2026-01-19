@@ -18,10 +18,12 @@ Creates:
 
 ```
 ./
-├── skills/
-├── commands/
-├── agents/
-└── packages/
+├── agr.toml
+└── resources/
+    ├── skills/
+    ├── commands/
+    ├── agents/
+    └── packages/
 ```
 
 ## Create a skill
@@ -34,9 +36,10 @@ Creates:
 
 ```
 ./
-└── skills/
-    └── code-reviewer/
-        └── SKILL.md
+└── resources/
+    └── skills/
+        └── code-reviewer/
+            └── SKILL.md
 ```
 
 ## Create a command
@@ -49,8 +52,9 @@ Creates:
 
 ```
 ./
-└── commands/
-    └── review.md
+└── resources/
+    └── commands/
+        └── review.md
 ```
 
 ## Create an agent
@@ -63,8 +67,9 @@ Creates:
 
 ```
 ./
-└── agents/
-    └── test-writer.md
+└── resources/
+    └── agents/
+        └── test-writer.md
 ```
 
 ## Create a package
@@ -79,18 +84,19 @@ Creates:
 
 ```
 ./
-└── packages/
-    └── my-toolkit/
-        ├── skills/
-        ├── commands/
-        └── agents/
+└── resources/
+    └── packages/
+        └── my-toolkit/
+            ├── skills/
+            ├── commands/
+            └── agents/
 ```
 
 Add resources to the package using `--path`:
 
 ```bash
-agr init skill helper --path packages/my-toolkit/skills/helper
-agr init command build --path packages/my-toolkit/commands
+agr init skill helper --path resources/packages/my-toolkit/skills/helper
+agr init command build --path resources/packages/my-toolkit/commands
 ```
 
 ## Sync to .claude/
@@ -101,7 +107,7 @@ After creating or editing resources, sync them to `.claude/`:
 agr sync
 ```
 
-Resources are installed to `.claude/{type}/{username}/{name}` where Claude Code can use them.
+Skills are installed with flattened colon names (e.g., `.claude/skills/username:code-reviewer/`) for Claude Code discoverability. Commands and agents use nested paths (e.g., `.claude/commands/username/review.md`).
 
 ## Use a custom path
 

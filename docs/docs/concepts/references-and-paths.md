@@ -29,24 +29,25 @@ agr add acme/tools/review
 
 ## Nested resources with colons
 
-A resource name may include `:` to represent nested folders:
+A resource name may include `:` to represent nested folders in the source repository:
 
 ```bash
 agr add username/backend:hello-world
 ```
 
-This maps to a resource at `.claude/skills/backend/hello-world/` in the source repository.
+This maps to a resource at `resources/skills/backend/hello-world/` (or `.claude/skills/backend/hello-world/`) in the source repository.
 
 ## How references become paths
 
 When you install a resource, the reference determines where it goes:
 
-| Reference | Installed path |
-|-----------|----------------|
-| `kasperjunge/hello-world` | `.claude/skills/kasperjunge/hello-world/` |
-| `acme/tools/review` | `.claude/commands/acme/review.md` |
+| Reference | Resource Type | Installed path |
+|-----------|--------------|----------------|
+| `kasperjunge/hello-world` | skill | `.claude/skills/kasperjunge:hello-world/` |
+| `acme/tools/review` | command | `.claude/commands/acme/review.md` |
+| `kasperjunge/expert` | agent | `.claude/agents/kasperjunge/expert.md` |
 
-The username becomes a namespace directory, keeping resources organized by author.
+Skills use a flattened colon format (`username:skill-name`) because Claude Code only discovers top-level directories. Commands and agents use nested username directories.
 
 ## Using references with commands
 

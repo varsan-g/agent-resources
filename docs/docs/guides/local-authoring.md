@@ -12,17 +12,19 @@ Local authoring separates your source files from the installed `.claude/` direct
 
 ```
 ./
-├── skills/           # Your source files (edit here)
-├── commands/
-├── agents/
-├── packages/
+├── resources/           # Your source files (edit here)
+│   ├── skills/
+│   ├── commands/
+│   ├── agents/
+│   └── packages/
 │
-└── .claude/          # Installed files (synced automatically)
+└── .claude/             # Installed files (synced automatically)
     ├── skills/
-    │   └── your-username/
-    │       └── my-skill/
+    │   └── your-username:my-skill/
     ├── commands/
+    │   └── your-username/
     └── agents/
+        └── your-username/
 ```
 
 Benefits:
@@ -40,14 +42,16 @@ Benefits:
 agr init
 ```
 
-Creates the standard authoring directories:
+Creates `agr.toml` and the standard authoring directories:
 
 ```
 ./
-├── skills/
-├── commands/
-├── agents/
-└── packages/
+├── agr.toml
+└── resources/
+    ├── skills/
+    ├── commands/
+    ├── agents/
+    └── packages/
 ```
 
 ### Create a resource
@@ -56,7 +60,7 @@ Creates the standard authoring directories:
 agr init skill my-skill
 ```
 
-Creates `skills/my-skill/SKILL.md` with a starter template.
+Creates `resources/skills/my-skill/SKILL.md` with a starter template.
 
 ### Sync to .claude/
 
@@ -64,7 +68,7 @@ Creates `skills/my-skill/SKILL.md` with a starter template.
 agr sync
 ```
 
-Copies resources to `.claude/{type}/{username}/{name}` where Claude Code can use them.
+Copies resources to `.claude/` where Claude Code can use them. Skills are installed with flattened colon names (e.g., `.claude/skills/username:my-skill/`).
 
 ## Convention paths
 
@@ -72,12 +76,12 @@ agr discovers resources in these locations:
 
 | Path | Resource type |
 |------|---------------|
-| `skills/<name>/SKILL.md` | Skill |
-| `commands/<name>.md` | Command |
-| `agents/<name>.md` | Agent |
-| `packages/<pkg>/skills/<name>/SKILL.md` | Packaged skill |
-| `packages/<pkg>/commands/<name>.md` | Packaged command |
-| `packages/<pkg>/agents/<name>.md` | Packaged agent |
+| `resources/skills/<name>/SKILL.md` | Skill |
+| `resources/commands/<name>.md` | Command |
+| `resources/agents/<name>.md` | Agent |
+| `resources/packages/<pkg>/skills/<name>/SKILL.md` | Packaged skill |
+| `resources/packages/<pkg>/commands/<name>.md` | Packaged command |
+| `resources/packages/<pkg>/agents/<name>.md` | Packaged agent |
 
 ## Creating resources
 
@@ -90,9 +94,10 @@ agr init skill code-reviewer
 Creates:
 
 ```
-skills/
-└── code-reviewer/
-    └── SKILL.md
+resources/
+└── skills/
+    └── code-reviewer/
+        └── SKILL.md
 ```
 
 ### Commands
@@ -104,8 +109,9 @@ agr init command deploy
 Creates:
 
 ```
-commands/
-└── deploy.md
+resources/
+└── commands/
+    └── deploy.md
 ```
 
 ### Agents
@@ -117,8 +123,9 @@ agr init agent test-writer
 Creates:
 
 ```
-agents/
-└── test-writer.md
+resources/
+└── agents/
+    └── test-writer.md
 ```
 
 ### Packages
@@ -132,18 +139,19 @@ agr init package my-toolkit
 Creates:
 
 ```
-packages/
-└── my-toolkit/
-    ├── skills/
-    ├── commands/
-    └── agents/
+resources/
+└── packages/
+    └── my-toolkit/
+        ├── skills/
+        ├── commands/
+        └── agents/
 ```
 
 Then add resources to the package:
 
 ```bash
-agr init skill helper --path packages/my-toolkit/skills/helper
-agr init command build --path packages/my-toolkit/commands
+agr init skill helper --path resources/packages/my-toolkit/skills/helper
+agr init command build --path resources/packages/my-toolkit/commands
 ```
 
 ## Syncing resources
@@ -174,7 +182,7 @@ Removes resources from `.claude/` that no longer exist in your authoring paths.
 
 ## Username namespacing
 
-Resources are installed to `.claude/{type}/{username}/{name}` to prevent naming conflicts.
+Resources are installed to `.claude/` with username namespacing to prevent naming conflicts.
 
 ### How the username is determined
 
@@ -184,8 +192,12 @@ agr extracts the username from your git remote:
 # If your remote is:
 git@github.com:kasperjunge/agent-resources.git
 
-# Resources install to:
-.claude/skills/kasperjunge/my-skill/
+# Skills install with flattened colon format:
+.claude/skills/kasperjunge:my-skill/
+
+# Commands and agents use nested directories:
+.claude/commands/kasperjunge/my-command.md
+.claude/agents/kasperjunge/my-agent.md
 ```
 
 ### If no git remote exists
@@ -193,7 +205,7 @@ git@github.com:kasperjunge/agent-resources.git
 If agr can't determine a username, it uses `local` as the namespace:
 
 ```
-.claude/skills/local/my-skill/
+.claude/skills/local:my-skill/
 ```
 
 Configure a git remote to get proper namespacing:
@@ -215,8 +227,8 @@ agr init skill code-reviewer
 agr init command lint-check
 
 # Edit the files
-$EDITOR skills/code-reviewer/SKILL.md
-$EDITOR commands/lint-check.md
+$EDITOR resources/skills/code-reviewer/SKILL.md
+$EDITOR resources/commands/lint-check.md
 
 # Sync to .claude/
 agr sync
@@ -226,7 +238,7 @@ agr sync
 
 ```bash
 # Edit your resource
-$EDITOR skills/code-reviewer/SKILL.md
+$EDITOR resources/skills/code-reviewer/SKILL.md
 
 # Sync changes
 agr sync
@@ -237,7 +249,7 @@ agr sync
 
 ```bash
 # Delete a resource
-rm -rf skills/old-skill/
+rm -rf resources/skills/old-skill/
 
 # Remove from .claude/
 agr sync --prune
@@ -271,7 +283,7 @@ If you prefer the old behavior of creating resources directly in `.claude/`:
 agr init skill my-skill --legacy
 ```
 
-Creates `.claude/skills/my-skill/SKILL.md` instead of `skills/my-skill/SKILL.md`.
+Creates `.claude/skills/my-skill/SKILL.md` instead of `resources/skills/my-skill/SKILL.md`.
 
 !!! note
     Legacy resources aren't managed by `agr sync` and must be edited in place.
@@ -281,12 +293,10 @@ Creates `.claude/skills/my-skill/SKILL.md` instead of `skills/my-skill/SKILL.md`
 For publishing, you can define custom resource paths in `agr.toml`:
 
 ```toml
-[resource.my-skill]
-path = "skills/my-skill"
-type = "skill"
-
-[package.my-toolkit]
-path = "packages/my-toolkit"
+dependencies = [
+    {path = "resources/skills/my-skill", type = "skill"},
+    {path = "resources/packages/my-toolkit", type = "package"},
+]
 ```
 
 This allows consumers to install resources by name even if they're in non-standard locations.

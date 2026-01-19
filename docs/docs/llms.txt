@@ -11,7 +11,7 @@ commands, and subagents from GitHub.
 
 ```bash
 pip install agr
-agr add skill username/skill-name
+agr add username/skill-name
 ```
 
 ## Key Pages
@@ -33,16 +33,25 @@ agr add skill username/skill-name
 ## Common Commands
 
 ```bash
-# Install from GitHub
-agr add skill username/skill-name
-agr add command username/command-name
-agr add agent username/agent-name
+# Install from GitHub (auto-detects type)
+agr add username/resource-name
 
 # Install globally (all projects)
-agr add skill username/skill-name --global
+agr add username/resource-name --global
 
-# Scaffold a new repo
-agr init repo agent-resources
+# Run temporarily without installing
+agrx username/resource-name
+
+# Initialize authoring structure
+agr init
+
+# Create resources
+agr init skill my-skill
+agr init command my-command
+agr init agent my-agent
+
+# Sync dependencies
+agr sync
 ```
 
 ## Source Code

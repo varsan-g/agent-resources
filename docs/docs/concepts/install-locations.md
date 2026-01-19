@@ -13,8 +13,8 @@ Resources install to namespaced paths that include the GitHub username:
 ```
 .claude/
 ├── skills/
-│   └── kasperjunge/
-│       └── hello-world/
+│   └── kasperjunge:hello-world/
+│       └── SKILL.md
 ├── commands/
 │   └── kasperjunge/
 │       └── review.md
@@ -23,11 +23,14 @@ Resources install to namespaced paths that include the GitHub username:
         └── expert.md
 ```
 
+Skills use a flattened colon format (`username:skill-name`) because Claude Code only discovers top-level directories in `.claude/skills/`. Commands and agents use nested directories.
+
 This organization:
 
 - **Prevents naming conflicts** — Multiple authors can have resources with the same name
 - **Shows ownership** — You can see at a glance who created each resource
 - **Supports sync** — Makes it easy to track and prune resources
+- **Ensures discoverability** — Skills are at top-level where Claude Code finds them
 
 ## Project-local installs
 
@@ -43,8 +46,8 @@ This creates:
 ./
 └── .claude/
     └── skills/
-        └── kasperjunge/
-            └── hello-world/
+        └── kasperjunge:hello-world/
+            └── SKILL.md
 ```
 
 ## Global installs
@@ -61,8 +64,8 @@ This writes to:
 ~/
 └── .claude/
     └── skills/
-        └── kasperjunge/
-            └── hello-world/
+        └── kasperjunge:hello-world/
+            └── SKILL.md
 ```
 
 Global resources are available in all your projects.
@@ -90,4 +93,4 @@ agr continues to recognize these resources:
 - `agr remove hello-world` finds resources in both flat and namespaced paths
 - `agr sync --prune` only removes namespaced resources, preserving legacy installs
 
-New installations always use namespaced paths.
+New installations always use the flattened colon format for skills (`username:skill-name`) and nested paths for commands/agents.

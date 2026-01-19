@@ -8,22 +8,23 @@ agr supports two directory structures: **authoring paths** for local development
 
 ## Authoring paths (recommended)
 
-When authoring resources, use convention paths at the repository root:
+When authoring resources, use convention paths under `resources/`:
 
 ```
 ./
-├── skills/
-│   └── <skill-name>/
-│       └── SKILL.md
-├── commands/
-│   └── <command-name>.md
-├── agents/
-│   └── <agent-name>.md
-└── packages/
-    └── <package-name>/
-        ├── skills/
-        ├── commands/
-        └── agents/
+└── resources/
+    ├── skills/
+    │   └── <skill-name>/
+    │       └── SKILL.md
+    ├── commands/
+    │   └── <command-name>.md
+    ├── agents/
+    │   └── <agent-name>.md
+    └── packages/
+        └── <package-name>/
+            ├── skills/
+            ├── commands/
+            └── agents/
 ```
 
 Run `agr sync` to copy these to `.claude/` where Claude Code can use them.
@@ -41,12 +42,12 @@ agr discovers resources in these locations:
 
 | Path | Resource type |
 |------|---------------|
-| `skills/<name>/SKILL.md` | Skill |
-| `commands/<name>.md` | Command |
-| `agents/<name>.md` | Agent |
-| `packages/<pkg>/skills/<name>/SKILL.md` | Packaged skill |
-| `packages/<pkg>/commands/<name>.md` | Packaged command |
-| `packages/<pkg>/agents/<name>.md` | Packaged agent |
+| `resources/skills/<name>/SKILL.md` | Skill |
+| `resources/commands/<name>.md` | Command |
+| `resources/agents/<name>.md` | Agent |
+| `resources/packages/<pkg>/skills/<name>/SKILL.md` | Packaged skill |
+| `resources/packages/<pkg>/commands/<name>.md` | Packaged command |
+| `resources/packages/<pkg>/agents/<name>.md` | Packaged agent |
 
 ## .claude/ paths (installed/legacy)
 
@@ -56,9 +57,8 @@ Resources are installed to `.claude/` with username namespacing:
 ./
 └── .claude/
     ├── skills/
-    │   └── <username>/
-    │       └── <skill-name>/
-    │           └── SKILL.md
+    │   └── <username>:<skill-name>/
+    │       └── SKILL.md
     ├── commands/
     │   └── <username>/
     │       └── <command-name>.md
@@ -66,6 +66,8 @@ Resources are installed to `.claude/` with username namespacing:
         └── <username>/
             └── <agent-name>.md
 ```
+
+Skills use a flattened colon format (`username:skill-name`) because Claude Code only discovers top-level directories in `.claude/skills/`.
 
 This is where:
 
@@ -85,16 +87,11 @@ When others install your resources with `agr add`, agr looks for them in this or
 Define custom resource locations in `agr.toml`:
 
 ```toml
-[resource.my-skill]
-path = "skills/my-skill"
-type = "skill"
-
-[resource.my-command]
-path = "commands/my-command.md"
-type = "command"
-
-[package.my-toolkit]
-path = "packages/my-toolkit"
+dependencies = [
+    {path = "resources/skills/my-skill", type = "skill"},
+    {path = "resources/commands/my-command.md", type = "command"},
+    {path = "resources/packages/my-toolkit", type = "package"},
+]
 ```
 
 This allows consumers to install resources even if you use non-standard paths.

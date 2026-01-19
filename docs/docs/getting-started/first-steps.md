@@ -12,25 +12,26 @@ This page gets you from zero to a working resource in your project.
 agr add kasperjunge/hello-world
 ```
 
-The resource type (skill, command, agent, or bundle) is auto-detected. Resources install to namespaced paths organized by username:
+The resource type (skill, command, or agent) is auto-detected. Resources install to namespaced paths:
 
 ```
 ./
 └── .claude/
     └── skills/
-        └── kasperjunge/
-            └── hello-world/
+        └── kasperjunge:hello-world/
+            └── SKILL.md
 ```
 
-This organization prevents naming conflicts when you install resources from different authors.
+Skills use a flattened colon format (`username:skill-name`) for Claude Code discoverability. This prevents naming conflicts when you install resources from different authors.
 
 ## Track your dependencies
 
 When you add a resource, agr automatically records it in `agr.toml`:
 
 ```toml
-[dependencies]
-"kasperjunge/hello-world" = {}
+dependencies = [
+    {handle = "kasperjunge/hello-world", type = "skill"},
+]
 ```
 
 Commit this file to version control to share your project's resource dependencies with your team.

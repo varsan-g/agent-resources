@@ -20,7 +20,7 @@ Install skills, commands, and subagents from GitHub with a single command.
 - **Team reproducibility**: `agr.toml` tracks dependencies; `agr sync` installs everything
 - **Auto-detects resource type**: Skills, commands, subagents — agr figures it out
 - **Build your personal library**: Create a GitHub repo of your best skills and share them with anyone
-- **Bundle related resources**: Package skills, commands, and subagents together for easy distribution
+- **Package related resources**: Package skills, commands, and subagents together for easy distribution
 - **Stop editing `.claude/` directly**: Treat it like `.venv/` — let agr manage it, you manage source files
 
 ---
@@ -117,18 +117,19 @@ agr init
 Creates the authoring structure:
 
 ```
-skills/       # Your skills
-commands/     # Your commands
-agents/       # Your subagents
-packages/     # Grouped resources
+resources/
+├── skills/       # Your skills
+├── commands/     # Your commands
+├── agents/       # Your subagents
+└── packages/     # Grouped resources
 ```
 
 ### Create a resource
 
 ```bash
-agr init skill my-skill       # Creates skills/my-skill/SKILL.md
-agr init command deploy       # Creates commands/deploy.md
-agr init agent reviewer       # Creates agents/reviewer.md
+agr init skill my-skill       # Creates resources/skills/my-skill/SKILL.md
+agr init command deploy       # Creates resources/commands/deploy.md
+agr init agent reviewer       # Creates resources/agents/reviewer.md
 ```
 
 ### Sync to Claude Code
