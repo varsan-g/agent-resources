@@ -3,9 +3,6 @@ agr and agrx should always be unified and synced.
 
 Always include in the plan to write tests for what is implemented
 
-
-
-
 Skills docs:
 https://agentskills.io/specification
 https://opencode.ai/docs/skills
@@ -24,3 +21,7 @@ Subagents:
 https://cursor.com/docs/context/subagents
 https://code.claude.com/docs/en/sub-agents
 https://opencode.ai/docs/agents/
+
+Rules:
+https://code.claude.com/docs/en/memory
+https://cursor.com/docs/context/rules
