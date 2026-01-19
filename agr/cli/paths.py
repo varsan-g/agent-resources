@@ -4,21 +4,17 @@ import shutil
 from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
-from typing import NoReturn
+from typing import TYPE_CHECKING, NoReturn
 
 import typer
 from rich.console import Console
 from rich.live import Live
 from rich.spinner import Spinner
 
-from agr.constants import (
-    TOOL_DIR_NAME,
-    SKILLS_SUBDIR,
-    COMMANDS_SUBDIR,
-    AGENTS_SUBDIR,
-    RULES_SUBDIR,
-    PACKAGES_SUBDIR,
-)
+from agr.adapters import AdapterRegistry
+
+if TYPE_CHECKING:
+    from agr.adapters.base import ToolAdapter
 
 
 # Shared console instance for all CLI modules
@@ -27,14 +23,22 @@ console = Console()
 # Default repository name when not specified
 DEFAULT_REPO_NAME = "agent-resources"
 
+
+def _build_type_to_subdir() -> dict[str, str]:
+    """Build the TYPE_TO_SUBDIR mapping from the default adapter."""
+    adapter = AdapterRegistry.get_default()
+    fmt = adapter.format
+    return {
+        "skill": fmt.skill_dir,
+        "command": fmt.command_dir,
+        "agent": fmt.agent_dir,
+        "rule": fmt.rule_dir,
+        "package": "packages",  # Not yet in adapter
+    }
+
+
 # Shared mapping from resource type string to subdirectory
-TYPE_TO_SUBDIR: dict[str, str] = {
-    "skill": SKILLS_SUBDIR,
-    "command": COMMANDS_SUBDIR,
-    "agent": AGENTS_SUBDIR,
-    "rule": RULES_SUBDIR,
-    "package": PACKAGES_SUBDIR,
-}
+TYPE_TO_SUBDIR: dict[str, str] = _build_type_to_subdir()
 
 
 def find_repo_root() -> Path:
@@ -231,11 +235,22 @@ def parse_resource_ref(ref: str) -> tuple[str, str, str, list[str]]:
     return username, repo, name, path_segments
 
 
-def get_base_path(global_install: bool) -> Path:
-    """Get the base .claude directory path."""
+def get_base_path(global_install: bool, adapter: "ToolAdapter | None" = None) -> Path:
+    """Get the base tool directory path.
+
+    Args:
+        global_install: If True, return global config dir (~/.claude/)
+        adapter: Optional adapter to use (defaults to Claude adapter)
+
+    Returns:
+        Path to the base tool directory
+    """
+    if adapter is None:
+        adapter = AdapterRegistry.get_default()
     if global_install:
-        return Path.home() / TOOL_DIR_NAME
-    return Path.cwd() / TOOL_DIR_NAME
+        # Compute dynamically to allow test monkeypatching of Path.home()
+        return Path.home() / adapter.format.config_dir
+    return Path.cwd() / adapter.format.config_dir
 
 
 def get_destination(resource_subdir: str, global_install: bool) -> Path:

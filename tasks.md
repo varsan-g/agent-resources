@@ -11,7 +11,7 @@ Adding support for multiple AI coding tools (Claude Code, Cursor, and future too
 | 1 | Add Rule Resource Type | [#24](https://github.com/kasperjunge/agent-resources/issues/24) | DONE |
 | 2 | Implement Tool Adapter Infrastructure | [#25](https://github.com/kasperjunge/agent-resources/issues/25) | DONE |
 | 2.5 | Implement Resource Format Converter | [#30](https://github.com/kasperjunge/agent-resources/issues/30) | DONE |
-| 3 | Implement Claude Code Adapter | [#26](https://github.com/kasperjunge/agent-resources/issues/26) | TODO |
+| 3 | Implement Claude Code Adapter | [#26](https://github.com/kasperjunge/agent-resources/issues/26) | DONE |
 | 4 | Implement Cursor Adapter | [#27](https://github.com/kasperjunge/agent-resources/issues/27) | TODO |
 | 5 | Multi-Tool CLI Integration | [#28](https://github.com/kasperjunge/agent-resources/issues/28) | TODO |
 | 6 | Documentation and Migration | [#29](https://github.com/kasperjunge/agent-resources/issues/29) | TODO |
