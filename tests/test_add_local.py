@@ -335,36 +335,6 @@ class TestPackageExplosion:
         assert not old_path.exists()
 
 
-class TestAddNamespace:
-    """Tests for namespace directory support."""
-
-    def test_add_namespace_directory(self, tmp_path: Path, monkeypatch):
-        """Test adding a namespace directory (directory of skill directories)."""
-        monkeypatch.chdir(tmp_path)
-        (tmp_path / ".git").mkdir()
-
-        # Create namespace with multiple skills
-        namespace_dir = tmp_path / "my-namespace"
-        namespace_dir.mkdir()
-        for name in ["skill-a", "skill-b"]:
-            skill_dir = namespace_dir / name
-            skill_dir.mkdir()
-            (skill_dir / "SKILL.md").write_text(f"# {name}")
-
-        result = runner.invoke(app, ["add", "./my-namespace"])
-
-        assert result.exit_code == 0
-        # Output now shows flattened names
-        assert "local:my-namespace:skill-a" in result.output
-        assert "local:my-namespace:skill-b" in result.output
-
-        # Verify installed to .claude/skills/<flattened_name>/
-        # Namespace skills use flattened names: local:my-namespace:skill-a
-        for name in ["skill-a", "skill-b"]:
-            installed = tmp_path / ".claude" / "skills" / f"local:my-namespace:{name}" / "SKILL.md"
-            assert installed.exists()
-
-
 class TestWorkspaceAdd:
     """Tests for -w/--workspace flag."""
 
@@ -403,3 +373,62 @@ class TestWorkspaceAdd:
         content = (tmp_path / "agr.toml").read_text()
         assert "packages" in content
         assert "mypkg" in content
+
+
+class TestNoAutoDetection:
+    """Tests verifying structure-based auto-detection is removed."""
+
+    def test_directory_with_skills_subdir_not_package(self, tmp_path: Path, monkeypatch):
+        """Directory with skills/ subdir but no PACKAGE.md is NOT a package."""
+        monkeypatch.chdir(tmp_path)
+        (tmp_path / ".git").mkdir()
+
+        dir_path = tmp_path / "my-dir"
+        dir_path.mkdir()
+        skills_dir = dir_path / "skills" / "test-skill"
+        skills_dir.mkdir(parents=True)
+        (skills_dir / "SKILL.md").write_text("# Test")
+
+        from agr.cli.add import _detect_local_type
+        assert _detect_local_type(dir_path) is None  # NOT "package"
+
+    def test_directory_with_nested_skills_not_namespace(self, tmp_path: Path):
+        """Directory with nested SKILL.md files is NOT detected as namespace."""
+        dir_path = tmp_path / "my-dir"
+        nested = dir_path / "category" / "skill"
+        nested.mkdir(parents=True)
+        (nested / "SKILL.md").write_text("# Nested")
+
+        from agr.cli.add import _detect_local_type
+        assert _detect_local_type(dir_path) is None  # NOT "namespace"
+
+    def test_packages_path_not_auto_package(self, tmp_path: Path):
+        """Directory in packages/ without PACKAGE.md is NOT auto-detected as package."""
+        pkg_dir = tmp_path / "packages" / "my-pkg"
+        pkg_dir.mkdir(parents=True)
+        skills_dir = pkg_dir / "skills" / "skill1"
+        skills_dir.mkdir(parents=True)
+        (skills_dir / "SKILL.md").write_text("# Skill")
+
+        from agr.cli.add import _detect_local_type
+        assert _detect_local_type(pkg_dir) is None  # NOT "package"
+
+    def test_directory_with_nested_skills_uses_discovery(self, tmp_path: Path, monkeypatch):
+        """Directory with nested skills routes to discovery, not namespace handler."""
+        monkeypatch.chdir(tmp_path)
+        (tmp_path / ".git").mkdir()
+
+        # Create directory with skills (but no PACKAGE.md)
+        dir_path = tmp_path / "my-skills"
+        dir_path.mkdir()
+        for name in ["skill-a", "skill-b"]:
+            skill_dir = dir_path / name
+            skill_dir.mkdir()
+            (skill_dir / "SKILL.md").write_text(f"# {name}")
+
+        result = runner.invoke(app, ["add", "./my-skills"])
+
+        assert result.exit_code == 0
+        # Skills installed WITHOUT parent directory prefix (discovery behavior)
+        assert "local:skill-a" in result.output
+        assert "local:skill-b" in result.output

@@ -463,39 +463,6 @@ class TestAddNestedSkillFixtures:
         content = installed.read_text()
         assert "name: local:_test:nested-category:deep:deeply-nested-skill" in content
 
-    def test_add_namespace_directory(self, tmp_path, monkeypatch):
-        """Test adding the nested-category namespace directory.
-
-        When adding a namespace directory directly, the flattened name starts
-        from that directory (not including parent directories like _test).
-        """
-        monkeypatch.chdir(tmp_path)
-        (tmp_path / ".git").mkdir()
-
-        namespace_path = RESOURCES_PATH / "skills" / "_test" / "nested-category"
-
-        result = runner.invoke(app, ["add", str(namespace_path)])
-
-        assert result.exit_code == 0
-
-        # Verify all nested skills were installed
-        # Note: _test is NOT in the name because we added nested-category directly
-        assert (
-            tmp_path
-            / ".claude"
-            / "skills"
-            / "local:nested-category:nested-skill-a"
-            / "SKILL.md"
-        ).exists()
-
-        assert (
-            tmp_path
-            / ".claude"
-            / "skills"
-            / "local:nested-category:deep:deeply-nested-skill"
-            / "SKILL.md"
-        ).exists()
-
 
 class TestResourceFilesIntegrity:
     """Test that all committed test resource files are valid."""

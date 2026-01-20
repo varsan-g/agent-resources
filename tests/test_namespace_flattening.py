@@ -233,44 +233,6 @@ description: Growth hacking strategies
         assert "name: local:product-strategy:growth-hacker" in content
 
 
-class TestNamespaceAddFlattening:
-    """Tests for handle_add_namespace() flattening."""
-
-    def test_add_namespace_flattens_all_skills(self, tmp_path: Path, monkeypatch):
-        """Test that adding a namespace directory flattens all contained skills."""
-        monkeypatch.chdir(tmp_path)
-        (tmp_path / ".git").mkdir()
-
-        # Create namespace with multiple skills
-        namespace_dir = tmp_path / "product-strategy"
-        (namespace_dir / "growth-hacker").mkdir(parents=True)
-        (namespace_dir / "growth-hacker" / "SKILL.md").write_text("# Growth Hacker")
-        (namespace_dir / "flywheel").mkdir(parents=True)
-        (namespace_dir / "flywheel" / "SKILL.md").write_text("# Flywheel")
-
-        result = runner.invoke(app, ["add", "./product-strategy"])
-
-        assert result.exit_code == 0
-        assert "local:product-strategy:growth-hacker" in result.output
-        assert "local:product-strategy:flywheel" in result.output
-
-        # Verify both skills installed with flattened names
-        assert (
-            tmp_path
-            / ".claude"
-            / "skills"
-            / "local:product-strategy:growth-hacker"
-            / "SKILL.md"
-        ).exists()
-        assert (
-            tmp_path
-            / ".claude"
-            / "skills"
-            / "local:product-strategy:flywheel"
-            / "SKILL.md"
-        ).exists()
-
-
 class TestPackageExplodeFlattening:
     """Tests for _explode_package() flattening."""
 

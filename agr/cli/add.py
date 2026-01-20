@@ -81,123 +81,36 @@ def _is_glob_pattern(ref: str) -> bool:
     return "*" in ref or "?" in ref or "[" in ref
 
 
-def _has_resource_subdirs(path: Path) -> bool:
-    """Check if path has skills/, commands/, or agents/ subdirectories."""
-    return any((path / d).is_dir() for d in ("skills", "commands", "agents"))
-
-
 def _detect_local_type(path: Path) -> str | None:
-    """Detect resource type from a local path.
+    """Detect resource type from a local path using explicit markers.
 
-    Returns "skill", "command", "agent", "package", "namespace", or None if unknown.
-    Auto-detects based on:
+    Returns "skill", "command", "agent", "package", or None if unknown.
+
+    Detection rules:
     - Directory with PACKAGE.md -> package (highest priority)
     - Directory with SKILL.md -> skill
-    - File with .md extension -> command (or agent if in agents/ dir)
-    - Directory in packages/ -> package
-    - Directory with skills/, commands/, or agents/ subdirs -> package
-    - Directory containing skill subdirectories at any depth -> namespace
+    - File with .md extension -> command (or agent if in agents/ path)
+
+    Directories without explicit markers return None and route to
+    handle_add_directory() for individual resource discovery.
     """
-    # Handle files first
     if path.is_file():
         if path.suffix != ".md":
             return None
-        path_str = str(path)
-        if path.parent.name == "agents" or "agents/" in path_str:
+        if "agents/" in str(path):
             return "agent"
         return "command"
 
-    # From here on, path is a directory
     if not path.is_dir():
         return None
 
-    # PACKAGE.md marker has highest priority
     if (path / "PACKAGE.md").exists():
         return "package"
 
-    # Skill directory (contains SKILL.md)
     if (path / "SKILL.md").exists():
         return "skill"
 
-    # Directory with resource subdirs is a package
-    if _has_resource_subdirs(path):
-        return "package"
-
-    # Check if in packages/ directory
-    path_str = str(path)
-    if "packages/" in path_str or path_str.startswith("packages"):
-        return "package"
-
-    # Namespace: directory containing skills at any depth
-    if any(path.rglob("SKILL.md")):
-        return "namespace"
-
     return None
-
-
-def handle_add_namespace(
-    namespace_path: Path,
-    global_install: bool,
-    workspace: str | None = None,
-) -> None:
-    """Add all skills from a namespace directory recursively.
-
-    A namespace is a directory containing multiple skill subdirectories.
-    Skills are discovered recursively and installed with flattened colon-namespaced
-    directory names for Claude Code discoverability.
-
-    Args:
-        namespace_path: Path to the namespace directory
-        global_install: If True, install to ~/.claude/
-        workspace: Optional workspace package name
-    """
-    config_path, config = get_or_create_config()
-    base_path = get_base_path(global_install)
-    username = get_username_from_git_remote(find_repo_root()) or "local"
-    namespace_name = namespace_path.name
-
-    added_count = 0
-
-    # Find all skill directories recursively (containing SKILL.md)
-    for skill_md in namespace_path.rglob("SKILL.md"):
-        skill_dir = skill_md.parent
-        try:
-            rel_path = f"./{skill_dir.relative_to(Path.cwd())}"
-        except ValueError:
-            rel_path = str(skill_dir)
-
-        dep = Dependency(path=rel_path, type="skill")
-        if workspace:
-            config.add_to_workspace(workspace, dep)
-        else:
-            config.add_local(rel_path, "skill")
-
-        # Compute relative path from namespace root
-        # e.g., if namespace_path is "./skills" and skill_dir is "./skills/product/flywheel"
-        # then rel_to_namespace is "product/flywheel"
-        rel_to_namespace = skill_dir.relative_to(namespace_path)
-
-        # Build path segments: [namespace_name, ...rel_to_namespace parts]
-        segments = [namespace_name] + list(rel_to_namespace.parts)
-        flattened_name = compute_flattened_skill_name(username, segments)
-
-        # Install to .claude/skills/<flattened_name>/
-        dest_path = base_path / "skills" / flattened_name
-        dest_path.parent.mkdir(parents=True, exist_ok=True)
-        if dest_path.exists():
-            shutil.rmtree(dest_path)
-        shutil.copytree(skill_dir, dest_path)
-
-        # Update SKILL.md name field
-        update_skill_md_name(dest_path, flattened_name)
-
-        console.print(f"[green]Added skill '{flattened_name}'[/green]")
-        added_count += 1
-
-    config.save(config_path)
-    console.print(f"\n[dim]Added {added_count} resource(s)[/dim]")
-
-
 
 
 def _explode_package(
@@ -377,21 +290,15 @@ def handle_add_local(
     if not path.exists():
         error_exit(f"Path does not exist: {path}")
 
-    # Detect type first to handle namespaces properly
+    # Detect type if not explicitly provided
     if not resource_type:
         resource_type = _detect_local_type(path)
 
-    # Handle namespace (directory of skill directories) before generic directory check
-    if resource_type == "namespace":
-        handle_add_namespace(path, global_install, workspace)
-        return
-
-    # Check if it's a directory of resources (not a skill itself, not a namespace)
-    if path.is_dir() and not (path / "SKILL.md").exists() and resource_type not in ("package", "namespace"):
-        has_skills = any((d / "SKILL.md").exists() for d in path.iterdir() if d.is_dir())
-        has_md = any(path.glob("*.md"))
-        if has_skills or has_md:
-            handle_add_directory(path, resource_type, global_install, workspace)
+    # Directory without markers containing discoverable resources routes to discovery
+    if resource_type is None and path.is_dir():
+        has_resources = any(path.rglob("SKILL.md")) or any(path.glob("*.md"))
+        if has_resources:
+            handle_add_directory(path, None, global_install, workspace)
             return
 
     if not resource_type:

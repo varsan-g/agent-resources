@@ -207,14 +207,12 @@ class TestNestedResourceDiscovery:
         result = runner.invoke(app, ["add", "./skills/"])
 
         assert result.exit_code == 0
-        # Output shows flattened name - note that "skills" is part of the path segments
-        # since we're adding "./skills/" directory
-        assert "local:skills:org:team:project:feature" in result.output
+        # Flattened name preserves full path hierarchy
+        assert "local:org:team:project:feature" in result.output
         assert "Added 1 resource(s)" in result.output
 
-        # Verify installation uses flattened namespace structure
-        # Installed to .claude/skills/<flattened_name>/
-        installed = tmp_path / ".claude" / "skills" / "local:skills:org:team:project:feature" / "SKILL.md"
+        # Verify installation uses flattened directory structure
+        installed = tmp_path / ".claude" / "skills" / "local:org:team:project:feature" / "SKILL.md"
         assert installed.exists()
 
     def test_add_directory_handles_empty_subdirs(self, tmp_path: Path, monkeypatch):
