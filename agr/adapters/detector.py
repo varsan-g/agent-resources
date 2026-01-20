@@ -105,18 +105,9 @@ class ToolDetector:
         return detected
 
     def detect_from_config(self, config: "AgrConfig") -> list[str]:
-        """Detect target tools from agr configuration.
-
-        Looks for tool-specific settings in the config.
-
-        Args:
-            config: The agr configuration
-
-        Returns:
-            List of tool names specified in config
-        """
-        # Future: Look for [tools] section in agr.toml
-        # For now, return empty list (config doesn't specify tools yet)
+        """Get tool names from config's [tools].targets section."""
+        if config and config.tools and config.tools.targets:
+            return list(config.tools.targets)
         return []
 
     def get_target_tools(self, config: "AgrConfig | None" = None) -> list[str]:

@@ -3,7 +3,7 @@
 import shutil
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Annotated, Optional
+from typing import Annotated, List, Optional
 
 import typer
 
@@ -21,6 +21,7 @@ from agr.cli.common import (
     get_base_path,
 )
 from agr.cli.paths import remove_path
+from agr.cli.multi_tool import get_target_adapters, get_tool_base_path, InvalidToolError
 from agr.utils import (
     compute_flattened_resource_name,
     compute_path_segments,
@@ -531,6 +532,7 @@ def _handle_sync_repo(
     global_install: bool,
     overwrite: bool,
     skip_confirm: bool,
+    tool_flags: list[str] | None = None,
 ) -> None:
     """Sync all resources from a GitHub repository.
 
@@ -540,9 +542,8 @@ def _handle_sync_repo(
         global_install: Whether to install globally
         overwrite: Whether to overwrite existing resources
         skip_confirm: Whether to skip confirmation prompt
+        tool_flags: Optional list of tool names from CLI --tool flags
     """
-    base_path = get_base_path(global_install)
-
     console.print(f"Fetching {owner}/{repo}...")
 
     try:
@@ -558,33 +559,67 @@ def _handle_sync_repo(
             _print_discovered_resources(resources)
             console.print()
 
+            # Get target adapters
+            try:
+                adapters = get_target_adapters(config=None, tool_flags=tool_flags)
+            except InvalidToolError as e:
+                console.print(f"[red]Error: {e}[/red]")
+                raise typer.Exit(1)
+
+            # Show target tools
+            if len(adapters) > 1:
+                tool_names = [a.format.display_name for a in adapters]
+                console.print(f"[dim]Target tools: {', '.join(tool_names)}[/dim]")
+                console.print()
+
             # Confirm installation
             if not skip_confirm:
                 if not typer.confirm(f"Install {len(resources)} resources?", default=True):
                     console.print("[dim]Cancelled[/dim]")
                     return
 
-            console.print()
-            console.print("[bold]Installing:[/bold]")
+            # Install to each target tool
+            any_errors = False
+            for adapter in adapters:
+                tool_name = adapter.format.display_name
+                base_path = get_tool_base_path(adapter, global_install)
 
-            # Install all resources
-            result = _install_all_resources(
-                repo_dir, resources, owner, repo, base_path, overwrite
-            )
+                if len(adapters) > 1:
+                    console.print()
+                    console.print(f"[bold]Installing to {tool_name}...[/bold]")
+                else:
+                    console.print()
+                    console.print("[bold]Installing:[/bold]")
 
-            # Add to agr.toml
-            installed_names = set(
-                result.installed_skills
-                + result.installed_commands
-                + result.installed_agents
-                + result.installed_rules
-            )
-            _add_resources_to_toml(resources, owner, repo, installed_names, global_install)
+                # Install all resources
+                result = _install_all_resources(
+                    repo_dir, resources, owner, repo, base_path, overwrite
+                )
 
-            # Print summary
-            _print_sync_repo_result(result, owner, repo)
+                # Add to agr.toml (only once, for the first tool)
+                if adapter == adapters[0]:
+                    installed_names = set(
+                        result.installed_skills
+                        + result.installed_commands
+                        + result.installed_agents
+                        + result.installed_rules
+                    )
+                    _add_resources_to_toml(resources, owner, repo, installed_names, global_install)
 
-            if result.total_errors > 0:
+                # Print summary for this tool
+                if len(adapters) > 1:
+                    console.print(f"  [{tool_name}] {result.total_installed} installed")
+                else:
+                    _print_sync_repo_result(result, owner, repo)
+
+                if result.total_errors > 0:
+                    any_errors = True
+
+            if len(adapters) > 1:
+                console.print()
+                console.print(f"[dim]Summary: Synced to {len(adapters)} tool(s)[/dim]")
+
+            if any_errors:
                 raise typer.Exit(1)
 
     except RepoNotFoundError:
@@ -652,7 +687,7 @@ def sync(
     ] = None,
     global_install: bool = typer.Option(
         False, "--global", "-g",
-        help="Sync to global ~/.claude/ directory",
+        help="Sync to global config directory",
     ),
     prune: bool = typer.Option(
         False, "--prune",
@@ -674,6 +709,13 @@ def sync(
         False, "--yes", "-y",
         help="Skip confirmation prompt (for repo sync)",
     ),
+    tool: Annotated[
+        Optional[List[str]],
+        typer.Option(
+            "--tool",
+            help="Target tool(s) to sync to (e.g., --tool claude --tool cursor). Can be repeated.",
+        ),
+    ] = None,
 ) -> None:
     """Synchronize installed resources with agr.toml dependencies.
 
@@ -681,12 +723,14 @@ def sync(
     With owner/repo argument: installs all resources from that GitHub repository.
 
     Examples:
-        agr sync                    # Sync from agr.toml
-        agr sync maragudk/skills    # Install all from maragudk/skills
-        agr sync owner/repo --yes   # Skip confirmation
+        agr sync                              # Sync from agr.toml to configured tools
+        agr sync --tool claude --tool cursor  # Sync to specific tools
+        agr sync maragudk/skills              # Install all from maragudk/skills
+        agr sync owner/repo --yes             # Skip confirmation
 
     Use --local to only sync local path dependencies.
     Use --remote to only sync remote GitHub dependencies.
+    Use --tool to specify target tools (defaults to config or auto-detect).
     """
     # If repo_ref is provided, sync all resources from that repo
     if repo_ref:
@@ -696,13 +740,10 @@ def sync(
             console.print(f"[red]{e}[/red]")
             raise typer.Exit(1)
 
-        _handle_sync_repo(owner, repo, global_install, overwrite, yes)
+        _handle_sync_repo(owner, repo, global_install, overwrite, yes, tool)
         return
 
-    # Otherwise, sync from agr.toml (existing behavior)
-    base_path = get_base_path(global_install)
-    total_installed, total_updated, total_pruned, total_failed = 0, 0, 0, 0
-
+    # Otherwise, sync from agr.toml
     config_path = find_config()
     if not config_path:
         console.print("[dim]No agr.toml found. Nothing to sync.[/dim]")
@@ -716,34 +757,68 @@ def sync(
         config.save(config_path)
         console.print("[blue]Migrated agr.toml to new format[/blue]")
 
-    # Sync local dependencies
-    if not remote_only:
-        installed, updated, pruned, failed = _sync_local_dependencies(config, base_path, prune)
-        total_installed += installed
-        total_updated += updated
-        total_pruned += pruned
-        total_failed += failed
+    # Get target adapters
+    try:
+        adapters = get_target_adapters(config=config, tool_flags=tool)
+    except InvalidToolError as e:
+        console.print(f"[red]Error: {e}[/red]")
+        raise typer.Exit(1)
 
-    # Sync remote dependencies
-    if not local_only:
-        installed, _skipped, failed, pruned = _sync_remote_dependencies(config, base_path, prune)
-        total_installed += installed
-        total_pruned += pruned
-        total_failed += failed
+    # Track overall results across all tools
+    any_failed = False
+    tool_results: dict[str, dict[str, int]] = {}
 
-    # Print summary
-    _print_sync_summary(total_installed, total_updated, total_pruned, total_failed)
+    for adapter in adapters:
+        tool_name = adapter.format.display_name
+        base_path = get_tool_base_path(adapter, global_install)
 
-    if total_failed > 0:
+        if len(adapters) > 1:
+            console.print(f"\n[bold]Syncing to {tool_name}...[/bold]")
+
+        total_installed, total_updated, total_pruned, total_failed = 0, 0, 0, 0
+
+        # Sync local dependencies
+        if not remote_only:
+            installed, updated, pruned, failed = _sync_local_dependencies(config, base_path, prune)
+            total_installed += installed
+            total_updated += updated
+            total_pruned += pruned
+            total_failed += failed
+
+        # Sync remote dependencies
+        if not local_only:
+            installed, _skipped, failed, pruned = _sync_remote_dependencies(config, base_path, prune)
+            total_installed += installed
+            total_pruned += pruned
+            total_failed += failed
+
+        # Store results for this tool
+        tool_results[tool_name] = {
+            "installed": total_installed,
+            "updated": total_updated,
+            "pruned": total_pruned,
+            "failed": total_failed,
+        }
+
+        if len(adapters) > 1:
+            _print_tool_sync_summary(tool_name, total_installed, total_updated, total_pruned, total_failed)
+
+        if total_failed > 0:
+            any_failed = True
+
+    # Print overall summary
+    if len(adapters) == 1:
+        results = list(tool_results.values())[0]
+        _print_sync_summary(results["installed"], results["updated"], results["pruned"], results["failed"])
+    else:
+        _print_multi_tool_summary(tool_results)
+
+    if any_failed:
         raise typer.Exit(1)
 
 
-def _print_sync_summary(installed: int, updated: int, pruned: int, failed: int) -> None:
-    """Print a summary of sync results."""
-    if not (installed or updated or pruned or failed):
-        console.print("[dim]Nothing to sync.[/dim]")
-        return
-
+def _build_sync_parts(installed: int, updated: int, pruned: int, failed: int) -> list[str]:
+    """Build list of sync result parts for display."""
     parts = []
     if installed:
         parts.append(f"{installed} installed")
@@ -753,6 +828,38 @@ def _print_sync_summary(installed: int, updated: int, pruned: int, failed: int) 
         parts.append(f"{pruned} pruned")
     if failed:
         parts.append(f"[red]{failed} failed[/red]")
+    return parts
+
+
+def _print_tool_sync_summary(tool_name: str, installed: int, updated: int, pruned: int, failed: int) -> None:
+    """Print a summary of sync results for a single tool."""
+    parts = _build_sync_parts(installed, updated, pruned, failed)
+    summary = ", ".join(parts) if parts else "Nothing to sync"
+    console.print(f"  [{tool_name}] {summary}")
+
+
+def _print_multi_tool_summary(tool_results: dict[str, dict[str, int]]) -> None:
+    """Print overall summary for multi-tool sync."""
+    total_installed = sum(r["installed"] for r in tool_results.values())
+    total_failed = sum(r["failed"] for r in tool_results.values())
+    tools_synced = len([t for t, r in tool_results.items() if r["installed"] > 0 or r["updated"] > 0])
+
+    console.print()
+    if tools_synced > 0:
+        console.print(f"[dim]Summary: Synced to {tools_synced} tool(s), {total_installed} total resources[/dim]")
+    else:
+        console.print("[dim]Nothing to sync across all tools.[/dim]")
+
+    if total_failed > 0:
+        console.print(f"[red]{total_failed} total failures[/red]")
+
+
+def _print_sync_summary(installed: int, updated: int, pruned: int, failed: int) -> None:
+    """Print a summary of sync results."""
+    parts = _build_sync_parts(installed, updated, pruned, failed)
+    if not parts:
+        console.print("[dim]Nothing to sync.[/dim]")
+        return
     console.print(f"[dim]Sync complete: {', '.join(parts)}[/dim]")
 
 

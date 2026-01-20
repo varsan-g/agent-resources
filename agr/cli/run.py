@@ -19,6 +19,8 @@ from agr.cli.common import (
     get_destination,
     parse_resource_ref,
 )
+from agr.cli.multi_tool import InvalidToolError
+from agr.adapters import AdapterRegistry, ToolDetector
 from agr.exceptions import AgrError, MultipleResourcesFoundError
 from agr.fetcher import RESOURCE_CONFIGS, ResourceType, downloaded_repo, fetch_resource, fetch_resource_from_repo_dir
 from agr.resolver import resolve_remote_resource, ResourceSource
@@ -34,10 +36,49 @@ app = typer.Typer(
 AGRX_PREFIX = "_agrx_"  # Prefix for temporary resources to avoid conflicts
 
 
+def _get_tool_cli_command(tool_name: str | None) -> str:
+    """Get the CLI command for the specified tool.
+
+    Args:
+        tool_name: Tool name (e.g., "claude", "cursor") or None for auto-detect
+
+    Returns:
+        The CLI command to use (e.g., "claude")
+    """
+    if tool_name:
+        try:
+            adapter = AdapterRegistry.get(tool_name)
+        except Exception:
+            available = ", ".join(AdapterRegistry.all_names())
+            error_exit(f"Unknown tool '{tool_name}'. Available: {available}")
+
+        if not adapter.format.cli_command:
+            error_exit(f"Tool '{tool_name}' does not have a CLI command configured")
+        return adapter.format.cli_command
+
+    # Auto-detect: prefer tools with available CLI
+    detector = ToolDetector()
+    for tool in detector.detect_all():
+        if tool.cli_available and tool.cli_path:
+            adapter = AdapterRegistry.get(tool.name)
+            if adapter.format.cli_command:
+                return adapter.format.cli_command
+
+    return "claude"
+
+
+def _check_tool_cli(cli_command: str) -> None:
+    """Check if the specified CLI is installed."""
+    if shutil.which(cli_command) is None:
+        if cli_command == "claude":
+            error_exit("Claude CLI not found. Install it from: https://claude.ai/download")
+        else:
+            error_exit(f"CLI '{cli_command}' not found. Please install it first.")
+
+
 def _check_claude_cli() -> None:
-    """Check if Claude CLI is installed."""
-    if shutil.which("claude") is None:
-        error_exit("Claude CLI not found. Install it from: https://claude.ai/download")
+    """Check if Claude CLI is installed (legacy helper)."""
+    _check_tool_cli("claude")
 
 
 def _cleanup_resource(local_path: Path) -> None:
@@ -293,6 +334,31 @@ def _run_resource_unified(
         error_exit(str(e))
 
 
+def _extract_run_options(
+    args: list[str] | None,
+    explicit_type: str | None,
+    explicit_interactive: bool,
+    explicit_global: bool,
+    explicit_tool: str | None = None,
+) -> tuple[list[str], str | None, bool, bool, str | None]:
+    """Extract options from args list."""
+    extracted = extract_flags_from_args(args, explicit_type, explicit_interactive, explicit_global)
+    tool = explicit_tool
+
+    # Extract --tool from remaining args
+    final_cleaned: list[str] = []
+    i = 0
+    while i < len(extracted.cleaned_args):
+        if extracted.cleaned_args[i] == "--tool" and i + 1 < len(extracted.cleaned_args) and tool is None:
+            tool = extracted.cleaned_args[i + 1]
+            i += 2
+        else:
+            final_cleaned.append(extracted.cleaned_args[i])
+            i += 1
+
+    return final_cleaned, extracted.resource_type, extracted.interactive, extracted.global_install, tool
+
+
 @app.callback(invoke_without_command=True)
 def run_unified(
     ctx: typer.Context,
@@ -313,7 +379,7 @@ def run_unified(
         typer.Option(
             "--interactive",
             "-i",
-            help="Start interactive Claude session",
+            help="Start interactive session",
         ),
     ] = False,
     global_install: Annotated[
@@ -321,40 +387,52 @@ def run_unified(
         typer.Option(
             "--global",
             "-g",
-            help="Install temporarily to ~/.claude/ instead of ./.claude/",
+            help="Install temporarily to global config directory",
         ),
     ] = False,
+    tool: Annotated[
+        Optional[str],
+        typer.Option(
+            "--tool",
+            help="Target tool to run with (e.g., claude). Auto-detects available CLI by default.",
+        ),
+    ] = None,
 ) -> None:
     """Run a skill or command temporarily without permanent installation.
 
     Auto-detects the resource type (skill or command).
     Use --type to explicitly specify when a name exists in multiple types.
+    Use --tool to specify which tool's CLI to use (auto-detects by default).
 
     Examples:
       agrx kasperjunge/hello-world
       agrx kasperjunge/hello-world "my prompt"
       agrx kasperjunge/my-repo/hello-world --type skill
       agrx kasperjunge/hello-world --interactive
+      agrx kasperjunge/hello-world --tool claude
     """
-    # Extract flags from args if they were captured there (happens when flags come after ref)
-    extracted = extract_flags_from_args(args, resource_type, interactive, global_install)
-    resource_type = extracted.resource_type
-    interactive = extracted.interactive
-    global_install = extracted.global_install
+    # Extract options from args if they were captured there
+    cleaned_args, resource_type, interactive, global_install, tool = _extract_run_options(
+        args, resource_type, interactive, global_install, tool
+    )
 
-    if not extracted.cleaned_args:
+    if not cleaned_args:
         console.print(ctx.get_help())
         raise typer.Exit(0)
 
-    first_arg = extracted.cleaned_args[0]
+    # Get CLI command for the specified (or auto-detected) tool
+    cli_command = _get_tool_cli_command(tool)
+    _check_tool_cli(cli_command)
+
+    first_arg = cleaned_args[0]
 
     # Handle deprecated subcommand syntax: agrx skill <ref>
     if first_arg in DEPRECATED_SUBCOMMANDS:
-        if len(extracted.cleaned_args) < 2:
+        if len(cleaned_args) < 2:
             error_exit(f"Missing resource reference after '{first_arg}'.")
 
-        resource_ref = extracted.cleaned_args[1]
-        prompt_or_args = extracted.cleaned_args[2] if len(extracted.cleaned_args) > 2 else None
+        resource_ref = cleaned_args[1]
+        prompt_or_args = cleaned_args[2] if len(cleaned_args) > 2 else None
         console.print(
             f"[yellow]Warning: 'agrx {first_arg}' is deprecated. "
             f"Use 'agrx {resource_ref}' instead.[/yellow]"
@@ -368,7 +446,7 @@ def run_unified(
 
     # Normal unified run: agrx <ref> [prompt]
     resource_ref = first_arg
-    prompt_or_args = extracted.cleaned_args[1] if len(extracted.cleaned_args) > 1 else None
+    prompt_or_args = cleaned_args[1] if len(cleaned_args) > 1 else None
     _run_resource_unified(resource_ref, prompt_or_args, interactive, global_install, resource_type)
 
 

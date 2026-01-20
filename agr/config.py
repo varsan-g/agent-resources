@@ -15,6 +15,20 @@ VALID_TYPES = {"skill", "command", "agent", "rule", "package"}
 
 
 @dataclass
+class ToolsConfig:
+    """Configuration for target tools in agr.toml.
+
+    Specifies which AI coding tools resources should be synced to.
+
+    Example in agr.toml:
+        [tools]
+        targets = ["claude", "cursor"]
+    """
+
+    targets: list[str] = field(default_factory=list)
+
+
+@dataclass
 class Dependency:
     """Unified dependency specification for agr.toml.
 
@@ -107,6 +121,7 @@ class AgrConfig:
 
     dependencies: list[Dependency] = field(default_factory=list)
     packages: dict[str, PackageConfig] = field(default_factory=dict)
+    tools: ToolsConfig | None = field(default=None)
     _document: TOMLDocument | None = field(default=None, repr=False)
     _path: Path | None = field(default=None, repr=False)
     _migrated: bool = field(default=False, repr=False)  # Track if migration occurred
@@ -169,6 +184,20 @@ class AgrConfig:
                 dependencies.append(Dependency(path=path, type=dep_type))
 
         return dependencies
+
+    @classmethod
+    def _parse_tools_section(cls, doc: TOMLDocument) -> ToolsConfig | None:
+        """Parse [tools] section from document."""
+        tools_section = doc.get("tools")
+        if not isinstance(tools_section, dict):
+            return None
+
+        targets = tools_section.get("targets")
+        if not isinstance(targets, list):
+            return None
+
+        valid_targets = [t for t in targets if isinstance(t, str)]
+        return ToolsConfig(targets=valid_targets) if valid_targets else None
 
     @classmethod
     def _parse_packages_section(cls, doc: TOMLDocument) -> dict[str, "PackageConfig"]:
@@ -243,6 +272,9 @@ class AgrConfig:
         # Parse packages section
         config.packages = cls._parse_packages_section(doc)
 
+        # Parse tools section
+        config.tools = cls._parse_tools_section(doc)
+
         return config
 
     def save(self, path: Path | None = None) -> None:
@@ -293,6 +325,15 @@ class AgrConfig:
                 pkg_table["dependencies"] = pkg_deps_array
                 packages_table[name] = pkg_table
             doc["packages"] = packages_table
+
+        # Build tools section if configured
+        if self.tools and self.tools.targets:
+            tools_table = tomlkit.table()
+            targets_array = tomlkit.array()
+            for target in self.tools.targets:
+                targets_array.append(target)
+            tools_table["targets"] = targets_array
+            doc["tools"] = tools_table
 
         save_path.write_text(tomlkit.dumps(doc))
         self._document = doc

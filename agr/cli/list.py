@@ -2,13 +2,14 @@
 
 import json
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, List, Optional
 
 import typer
 from rich.table import Table
 
 from agr.config import AgrConfig, Dependency, find_config
 from agr.cli.common import TYPE_TO_SUBDIR, console, find_repo_root, get_base_path
+from agr.cli.multi_tool import get_target_adapters, get_tool_base_path, InvalidToolError
 from agr.github import get_username_from_git_remote
 from agr.utils import compute_flattened_skill_name, compute_path_segments_from_skill_path
 
@@ -92,12 +93,10 @@ def _format_simple(
     username: str,
 ) -> str:
     """Format dependencies as simple text."""
-    lines = []
-    for dep in deps:
-        identifier = dep.path if dep.is_local else dep.handle
-        installed = _is_installed(dep, base_path, username)
-        status = "installed" if installed else "not installed"
-        lines.append(f"{identifier} ({dep.type}) - {status}")
+    lines = [
+        f"{dep.path or dep.handle} ({dep.type}) - {'installed' if _is_installed(dep, base_path, username) else 'not installed'}"
+        for dep in deps
+    ]
     return "\n".join(lines)
 
 
@@ -119,6 +118,68 @@ def _format_json(
             entry["path"] = dep.path
         if dep.handle:
             entry["handle"] = dep.handle
+        data.append(entry)
+    return json.dumps(data, indent=2)
+
+
+def _format_multi_tool_table(
+    deps: list[Dependency],
+    adapters: list,  # list of ToolAdapter
+    username: str,
+    global_install: bool,
+) -> Table:
+    """Format dependencies as a rich table with per-tool status."""
+    table = Table(show_header=True, header_style="bold")
+    table.add_column("Source", style="cyan")
+    table.add_column("Type", style="yellow")
+    table.add_column("Handle/Path", style="white")
+
+    # Add a status column for each tool
+    for adapter in adapters:
+        table.add_column(adapter.format.display_name, style="green")
+
+    for dep in deps:
+        source = "local" if dep.is_local else "remote"
+        identifier = dep.path if dep.is_local else dep.handle
+
+        # Check installation status for each tool
+        tool_statuses = []
+        for adapter in adapters:
+            base_path = get_tool_base_path(adapter, global_install)
+            installed = _is_installed(dep, base_path, username)
+            status = "[green]✓[/green]" if installed else "[red]✗[/red]"
+            tool_statuses.append(status)
+
+        table.add_row(source, dep.type, identifier or "", *tool_statuses)
+
+    return table
+
+
+def _format_multi_tool_json(
+    deps: list[Dependency],
+    adapters: list,  # list of ToolAdapter
+    username: str,
+    global_install: bool,
+) -> str:
+    """Format dependencies as JSON with per-tool status."""
+    data = []
+    for dep in deps:
+        entry = {
+            "type": dep.type,
+            "source": "local" if dep.is_local else "remote",
+            "tools": {},
+        }
+        if dep.path:
+            entry["path"] = dep.path
+        if dep.handle:
+            entry["handle"] = dep.handle
+
+        # Check installation status for each tool
+        for adapter in adapters:
+            base_path = get_tool_base_path(adapter, global_install)
+            installed = _is_installed(dep, base_path, username)
+            entry["tools"][adapter.format.name] = installed
+
         data.append(entry)
     return json.dumps(data, indent=2)
 
@@ -153,19 +214,28 @@ def list_dependencies(
         typer.Option(
             "--global",
             "-g",
-            help="Check installation in ~/.claude/ instead of ./.claude/",
+            help="Check installation in global config directory",
         ),
     ] = False,
+    tool: Annotated[
+        Optional[List[str]],
+        typer.Option(
+            "--tool",
+            help="Target tool(s) to check status for (e.g., --tool claude --tool cursor)",
+        ),
+    ] = None,
 ) -> None:
     """List all dependencies from agr.toml with their install status.
 
     Shows both local path dependencies and remote GitHub dependencies.
+    Use --tool to check status for specific tools (shows per-tool columns).
 
     Examples:
-      agr list                  # Show all dependencies as table
-      agr list --format json    # Output as JSON
-      agr list --local          # Show only local dependencies
-      agr list --remote         # Show only remote dependencies
+      agr list                              # Show all dependencies as table
+      agr list --format json                # Output as JSON
+      agr list --local                      # Show only local dependencies
+      agr list --remote                     # Show only remote dependencies
+      agr list --tool claude --tool cursor  # Show per-tool installation status
     """
     config_path = find_config()
     if not config_path:
@@ -191,21 +261,44 @@ def list_dependencies(
         console.print("[dim]No matching dependencies found.[/dim]")
         return
 
-    # Get base path and username for install status check
-    base_path = get_base_path(global_install)
+    # Get username for install status check
     repo_root = find_repo_root()
     username = get_username_from_git_remote(repo_root) or "local"
 
-    # Format output
-    if format == "json":
-        console.print(_format_json(deps, base_path, username))
-    elif format == "simple":
-        console.print(_format_simple(deps, base_path, username))
-    else:
-        table = _format_table(deps, base_path, username)
-        console.print(table)
+    # Get target adapters
+    try:
+        adapters = get_target_adapters(config=config, tool_flags=tool)
+    except InvalidToolError as e:
+        console.print(f"[red]Error: {e}[/red]")
+        raise typer.Exit(1)
 
-    # Summary
-    total = len(deps)
-    installed = sum(1 for d in deps if _is_installed(d, base_path, username))
-    console.print(f"\n[dim]{installed}/{total} installed[/dim]")
+    # Multi-tool display if more than one adapter
+    if len(adapters) > 1:
+        if format == "json":
+            console.print(_format_multi_tool_json(deps, adapters, username, global_install))
+        else:
+            table = _format_multi_tool_table(deps, adapters, username, global_install)
+            console.print(table)
+
+        # Summary per tool
+        console.print()
+        for adapter in adapters:
+            base_path = get_tool_base_path(adapter, global_install)
+            installed = sum(1 for d in deps if _is_installed(d, base_path, username))
+            console.print(f"[dim]{adapter.format.display_name}: {installed}/{len(deps)} installed[/dim]")
+    else:
+        # Single tool display (original behavior)
+        base_path = get_tool_base_path(adapters[0], global_install)
+
+        if format == "json":
+            console.print(_format_json(deps, base_path, username))
+        elif format == "simple":
+            console.print(_format_simple(deps, base_path, username))
+        else:
+            table = _format_table(deps, base_path, username)
+            console.print(table)
+
+        # Summary
+        total = len(deps)
+        installed = sum(1 for d in deps if _is_installed(d, base_path, username))
+        console.print(f"\n[dim]{installed}/{total} installed[/dim]")

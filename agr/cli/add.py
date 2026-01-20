@@ -18,7 +18,8 @@ from agr.cli.common import (
     handle_add_unified,
     is_local_path,
 )
-from agr.config import Dependency, get_or_create_config
+from agr.cli.multi_tool import get_target_adapters, get_tool_base_path, InvalidToolError
+from agr.config import AgrConfig, Dependency, find_config, get_or_create_config
 from agr.fetcher import ResourceType
 from agr.github import get_username_from_git_remote
 from agr.package import parse_package_md, validate_no_nested_packages
@@ -45,19 +46,21 @@ def extract_options_from_args(
     explicit_type: str | None,
     explicit_to: str | None,
     explicit_workspace: str | None = None,
-) -> tuple[list[str], str | None, str | None, str | None]:
-    """Extract --type/-t, --to, and --workspace/-w options from args list if present.
+    explicit_tools: list[str] | None = None,
+) -> tuple[list[str], str | None, str | None, str | None, list[str] | None]:
+    """Extract options from args list when they appear after resource reference.
 
-    When options appear after the resource reference, Typer captures them
-    as part of the variadic args list. This function extracts them.
+    Typer captures options after positional args in the variadic args list.
+    This function extracts --type/-t, --to, --workspace/-w, and --tool options.
     """
     if not args:
-        return [], explicit_type, explicit_to, explicit_workspace
+        return [], explicit_type, explicit_to, explicit_workspace, explicit_tools
 
-    cleaned_args = []
+    cleaned_args: list[str] = []
     resource_type = explicit_type
     to_package = explicit_to
     workspace = explicit_workspace
+    tools = list(explicit_tools) if explicit_tools else None
 
     i = 0
     while i < len(args):
@@ -73,11 +76,16 @@ def extract_options_from_args(
         elif arg in ("--workspace", "-w") and has_next and workspace is None:
             workspace = args[i + 1]
             i += 2
+        elif arg == "--tool" and has_next:
+            if tools is None:
+                tools = []
+            tools.append(args[i + 1])
+            i += 2
         else:
             cleaned_args.append(arg)
             i += 1
 
-    return cleaned_args, resource_type, to_package, workspace
+    return cleaned_args, resource_type, to_package, workspace, tools
 
 
 
@@ -318,8 +326,9 @@ def handle_add_local(
     resource_type: str | None,
     global_install: bool = False,
     workspace: str | None = None,
+    tool_flags: list[str] | None = None,
 ) -> None:
-    """Handle adding a local resource to agr.toml and installing to .claude/."""
+    """Handle adding a local resource to agr.toml and installing to target tools."""
     path = Path(local_path)
 
     if not path.exists():
@@ -333,7 +342,7 @@ def handle_add_local(
     if resource_type is None and path.is_dir():
         has_resources = any(path.rglob("SKILL.md")) or any(path.glob("*.md"))
         if has_resources:
-            handle_add_directory(path, None, global_install, workspace)
+            handle_add_directory(path, None, global_install, workspace, tool_flags)
             return
 
     if not resource_type:
@@ -369,19 +378,33 @@ def handle_add_local(
         config.add_local(local_path, resource_type)
     config.save(config_path)
 
-    # Install to .claude/
-    base_path = get_base_path(global_install)
-    installed_name = _install_local_resource(path, resource_type, username, base_path)
+    # Get target adapters
+    try:
+        adapters = get_target_adapters(config=config, tool_flags=tool_flags)
+    except InvalidToolError as e:
+        error_exit(str(e))
 
-    console.print(f"[green]Added local {resource_type} '{name}'[/green]")
-    console.print(f"  path: {local_path}")
-    if workspace:
-        console.print(f"  workspace: {workspace}")
-    # Skills use flattened names, commands/agents use nested paths
-    if resource_type == "skill":
-        console.print(f"  installed to: .claude/{resource_type}s/{installed_name}")
-    else:
-        console.print(f"  installed to: .claude/{resource_type}s/{username}/{name}")
+    # Install to all target tools
+    for adapter in adapters:
+        base_path = get_tool_base_path(adapter, global_install)
+        installed_name = _install_local_resource(path, resource_type, username, base_path)
+
+        tool_name = adapter.format.display_name
+        config_dir = adapter.format.config_dir
+
+        if len(adapters) > 1:
+            console.print(f"[green]Added local {resource_type} '{name}' to {tool_name}[/green]")
+        else:
+            console.print(f"[green]Added local {resource_type} '{name}'[/green]")
+
+        console.print(f"  path: {local_path}")
+        if workspace:
+            console.print(f"  workspace: {workspace}")
+        # Skills use flattened names, commands/agents use nested paths
+        if resource_type == "skill":
+            console.print(f"  installed to: {config_dir}/{resource_type}s/{installed_name}")
+        else:
+            console.print(f"  installed to: {config_dir}/{resource_type}s/{username}/{name}")
 
 
 def handle_add_directory(
@@ -389,6 +412,7 @@ def handle_add_directory(
     resource_type: str | None,
     global_install: bool = False,
     workspace: str | None = None,
+    tool_flags: list[str] | None = None,
 ) -> None:
     """Add all resources in a directory recursively.
 
@@ -399,15 +423,21 @@ def handle_add_directory(
     Args:
         dir_path: Path to the directory containing resources
         resource_type: Optional explicit resource type
-        global_install: If True, install to ~/.claude/
+        global_install: If True, install to global config directory
         workspace: Optional workspace package name
+        tool_flags: Optional list of tool names from CLI --tool flags
     """
     config_path, config = get_or_create_config()
-    base_path = get_base_path(global_install)
     username = get_username_from_git_remote(find_repo_root()) or "local"
 
     # Check if directory is inside a package
     package_context = find_package_context(dir_path)
+
+    # Get target adapters
+    try:
+        adapters = get_target_adapters(config=config, tool_flags=tool_flags)
+    except InvalidToolError as e:
+        error_exit(str(e))
 
     added_count = 0
 
@@ -423,8 +453,15 @@ def handle_add_directory(
             config.add_to_workspace(workspace, dep)
         else:
             config.add_local(rel_path, "skill")
-        installed_name = _install_local_resource(skill_dir, "skill", username, base_path, package_context)
-        console.print(f"[green]Added skill '{installed_name}'[/green]")
+
+        # Install to all target tools
+        for adapter in adapters:
+            base_path = get_tool_base_path(adapter, global_install)
+            installed_name = _install_local_resource(skill_dir, "skill", username, base_path, package_context)
+            if len(adapters) > 1:
+                console.print(f"[green]Added skill '{installed_name}' to {adapter.format.display_name}[/green]")
+            else:
+                console.print(f"[green]Added skill '{installed_name}'[/green]")
         added_count += 1
 
     # Collect all skill directories to exclude their .md files
@@ -450,8 +487,15 @@ def handle_add_directory(
                 config.add_to_workspace(workspace, dep)
             else:
                 config.add_local(rel_path, detected_type)
-            _install_local_resource(md_file, detected_type, username, base_path, package_context)
-            console.print(f"[green]Added {detected_type} '{md_file.stem}'[/green]")
+
+            # Install to all target tools
+            for adapter in adapters:
+                base_path = get_tool_base_path(adapter, global_install)
+                _install_local_resource(md_file, detected_type, username, base_path, package_context)
+                if len(adapters) > 1:
+                    console.print(f"[green]Added {detected_type} '{md_file.stem}' to {adapter.format.display_name}[/green]")
+                else:
+                    console.print(f"[green]Added {detected_type} '{md_file.stem}'[/green]")
             added_count += 1
 
     config.save(config_path)
@@ -462,13 +506,15 @@ def handle_add_glob(
     pattern: str,
     resource_type: str | None,
     global_install: bool = False,
+    tool_flags: list[str] | None = None,
 ) -> None:
     """Handle adding multiple local resources via glob pattern.
 
     Args:
         pattern: Glob pattern like "./commands/*.md"
         resource_type: Optional explicit resource type
-        global_install: If True, install to ~/.claude/
+        global_install: If True, install to global config directory
+        tool_flags: Optional list of tool names from CLI --tool flags
     """
     # Expand glob pattern
     matches = list(glob.glob(pattern, recursive=True))
@@ -491,7 +537,12 @@ def handle_add_glob(
         username = "local"
 
     config_path, config = get_or_create_config()
-    base_path = get_base_path(global_install)
+
+    # Get target adapters
+    try:
+        adapters = get_target_adapters(config=config, tool_flags=tool_flags)
+    except InvalidToolError as e:
+        error_exit(str(e))
 
     added_count = 0
     for path in paths:
@@ -511,12 +562,17 @@ def handle_add_glob(
         # Add to config
         config.add_local(path_str, detected_type)
 
-        # Install to .claude/
-        installed_name = _install_local_resource(path, detected_type, username, base_path)
+        # Install to all target tools
+        for adapter in adapters:
+            base_path = get_tool_base_path(adapter, global_install)
+            installed_name = _install_local_resource(path, detected_type, username, base_path)
 
-        # Use flattened name for skills, original name for others
-        display_name = installed_name if detected_type == "skill" else (path.stem if path.is_file() else path.name)
-        console.print(f"[green]Added {detected_type} '{display_name}'[/green]")
+            # Use flattened name for skills, original name for others
+            display_name = installed_name if detected_type == "skill" else (path.stem if path.is_file() else path.name)
+            if len(adapters) > 1:
+                console.print(f"[green]Added {detected_type} '{display_name}' to {adapter.format.display_name}[/green]")
+            else:
+                console.print(f"[green]Added {detected_type} '{display_name}'[/green]")
         added_count += 1
 
     # Save config
@@ -557,7 +613,7 @@ def add_unified(
         typer.Option(
             "--global",
             "-g",
-            help="Install to ~/.claude/ instead of ./.claude/",
+            help="Install to global config directory",
         ),
     ] = False,
     workspace: Annotated[
@@ -575,29 +631,39 @@ def add_unified(
             help="(Deprecated) Add local resource to a package namespace",
         ),
     ] = None,
+    tool: Annotated[
+        Optional[List[str]],
+        typer.Option(
+            "--tool",
+            help="Target tool(s) to install to (e.g., --tool claude --tool cursor)",
+        ),
+    ] = None,
 ) -> None:
     """Add a resource from a GitHub repository or local path.
 
     REFERENCE format:
       - username/name: installs from github.com/username/agent-resources
       - username/repo/name: installs from github.com/username/repo
-      - ./path/to/resource: adds local path and installs to .claude/
+      - ./path/to/resource: adds local path and installs to target tools
       - ./path/*.md: glob pattern to add multiple resources
 
     Auto-detects the resource type (skill, command, agent, package, or bundle).
     Use --type to explicitly specify when needed.
+    Use --tool to specify target tools (defaults to config or auto-detect).
 
     Examples:
       agr add kasperjunge/hello-world
       agr add kasperjunge/my-repo/hello-world --type skill
       agr add kasperjunge/productivity --global
       agr add ./skills/my-skill
-      agr add ./commands/deploy.md
+      agr add ./commands/deploy.md --tool claude --tool cursor
       agr add ./commands/*.md
       agr add ./packages/my-toolkit --type package
     """
-    # Extract --type/-t, --to, and --workspace/-w from args if captured there (happens when options come after ref)
-    cleaned_args, resource_type, to_package, workspace = extract_options_from_args(args, resource_type, to_package, workspace)
+    # Extract options from args if captured there (happens when options come after ref)
+    cleaned_args, resource_type, to_package, workspace, tool = extract_options_from_args(
+        args, resource_type, to_package, workspace, tool
+    )
 
     if not cleaned_args:
         console.print(ctx.get_help())
@@ -608,19 +674,19 @@ def add_unified(
     if len(local_paths) > 1:
         # Shell expanded a glob pattern, process all local paths
         for local_path in local_paths:
-            handle_add_local(local_path, resource_type, global_install, workspace)
+            handle_add_local(local_path, resource_type, global_install, workspace, tool)
         return
 
     first_arg = cleaned_args[0]
 
     # Handle glob patterns
     if is_local_path(first_arg) and _is_glob_pattern(first_arg):
-        handle_add_glob(first_arg, resource_type, global_install)
+        handle_add_glob(first_arg, resource_type, global_install, tool)
         return
 
     # Handle local paths
     if is_local_path(first_arg):
-        handle_add_local(first_arg, resource_type, global_install, workspace)
+        handle_add_local(first_arg, resource_type, global_install, workspace, tool)
         return
 
     # Handle deprecated subcommand syntax: agr add skill <ref>
@@ -629,6 +695,8 @@ def add_unified(
         return
 
     # Normal unified add: agr add <ref>
+    # Note: Remote resources currently only support single tool (Claude)
+    # Multi-tool support for remote resources is planned for future
     handle_add_unified(first_arg, resource_type, overwrite, global_install)
 
 

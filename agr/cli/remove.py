@@ -18,6 +18,7 @@ from agr.cli.common import (
     handle_remove_unified,
     is_local_path,
 )
+from agr.cli.multi_tool import get_target_adapters, get_tool_base_path, InvalidToolError
 from agr.config import find_config, AgrConfig
 from agr.fetcher import ResourceType
 from agr.github import get_username_from_git_remote
@@ -31,14 +32,16 @@ DEPRECATED_SUBCOMMANDS = {"skill", "command", "agent", "bundle"}
 def handle_remove_local(
     local_path: str,
     global_install: bool = False,
+    tool_flags: list[str] | None = None,
 ) -> None:
     """Handle removing a local resource by path.
 
-    Removes from both agr.toml and .claude/ directory.
+    Removes from both agr.toml and target tool directories.
 
     Args:
         local_path: The local path to remove (e.g., "./commands/docs.md")
-        global_install: If True, remove from ~/.claude/
+        global_install: If True, remove from global config directory
+        tool_flags: Optional list of tool names from CLI --tool flags
     """
     # Find and load config
     config_path = find_config()
@@ -64,25 +67,36 @@ def handle_remove_local(
 
     subdir = TYPE_TO_SUBDIR.get(dep.type, "skills")
 
-    base_path = get_base_path(global_install)
+    # Get target adapters
+    try:
+        adapters = get_target_adapters(config=config, tool_flags=tool_flags)
+    except InvalidToolError as e:
+        error_exit(str(e))
 
-    if dep.type in ("skill", "package"):
-        installed_path = base_path / subdir / username / name
-    else:
-        installed_path = base_path / subdir / username / f"{name}.md"
+    # Remove from all target tools
+    for adapter in adapters:
+        base_path = get_tool_base_path(adapter, global_install)
+        config_dir = adapter.format.config_dir
 
-    # Remove from .claude/
-    if installed_path.exists():
-        if installed_path.is_dir():
-            shutil.rmtree(installed_path)
+        if dep.type in ("skill", "package"):
+            installed_path = base_path / subdir / username / name
         else:
-            installed_path.unlink()
-        console.print(f"[green]Removed from .claude/: {installed_path.relative_to(base_path)}[/green]")
+            installed_path = base_path / subdir / username / f"{name}.md"
 
-        # Clean up empty parent directories
-        parent = installed_path.parent
-        if parent.exists() and not any(parent.iterdir()):
-            parent.rmdir()
+        # Remove from tool directory
+        if installed_path.exists():
+            if installed_path.is_dir():
+                shutil.rmtree(installed_path)
+            else:
+                installed_path.unlink()
+
+            rel_path = installed_path.relative_to(base_path)
+            console.print(f"[green]Removed from {config_dir}/: {rel_path}[/green]")
+
+            # Clean up empty parent directories
+            parent = installed_path.parent
+            if parent.exists() and not any(parent.iterdir()):
+                parent.rmdir()
 
     # Remove from config
     config.remove_by_path(local_path)
@@ -94,6 +108,39 @@ def handle_remove_local(
 app = typer.Typer(
     help="Remove skills, commands, or agents.",
 )
+
+
+def _extract_remove_options(
+    args: list[str] | None,
+    explicit_type: str | None,
+    explicit_tools: list[str] | None = None,
+) -> tuple[list[str], str | None, list[str] | None]:
+    """Extract --type/-t and --tool options from args list."""
+    if not args:
+        return [], explicit_type, explicit_tools
+
+    cleaned_args: list[str] = []
+    resource_type = explicit_type
+    tools = list(explicit_tools) if explicit_tools else None
+
+    i = 0
+    while i < len(args):
+        arg = args[i]
+        has_next = i + 1 < len(args)
+
+        if arg in ("--type", "-t") and has_next and resource_type is None:
+            resource_type = args[i + 1]
+            i += 2
+        elif arg == "--tool" and has_next:
+            if tools is None:
+                tools = []
+            tools.append(args[i + 1])
+            i += 2
+        else:
+            cleaned_args.append(arg)
+            i += 1
+
+    return cleaned_args, resource_type, tools
 
 
 @app.callback(invoke_without_command=True)
@@ -116,14 +163,22 @@ def remove_unified(
         typer.Option(
             "--global",
             "-g",
-            help="Remove from ~/.claude/ instead of ./.claude/",
+            help="Remove from global config directory",
         ),
     ] = False,
+    tool: Annotated[
+        Optional[List[str]],
+        typer.Option(
+            "--tool",
+            help="Target tool(s) to remove from (e.g., --tool claude --tool cursor)",
+        ),
+    ] = None,
 ) -> None:
     """Remove a resource from the local installation with auto-detection.
 
     Auto-detects the resource type (skill, command, agent) from local files.
     Use --type to explicitly specify when a name exists in multiple types.
+    Use --tool to specify target tools (defaults to config or auto-detect).
 
     Supports both resource names and local paths:
       agr remove hello-world          # Remove by name
@@ -134,9 +189,10 @@ def remove_unified(
       agr remove hello-world --type skill
       agr remove hello-world --global
       agr remove ./commands/docs.md
+      agr remove ./commands/docs.md --tool claude --tool cursor
     """
-    # Extract --type/-t from args if it was captured there (happens when type comes after name)
-    cleaned_args, resource_type = extract_type_from_args(args, resource_type)
+    # Extract options from args if they were captured there
+    cleaned_args, resource_type, tool = _extract_remove_options(args, resource_type, tool)
 
     if not cleaned_args:
         console.print(ctx.get_help())
@@ -146,7 +202,7 @@ def remove_unified(
 
     # Handle local paths
     if is_local_path(first_arg):
-        handle_remove_local(first_arg, global_install)
+        handle_remove_local(first_arg, global_install, tool)
         return
 
     # Handle deprecated subcommand syntax: agr remove skill <name>
@@ -175,5 +231,6 @@ def remove_unified(
         return
 
     # Normal unified remove: agr remove <name>
+    # Note: Remote resources currently only support single tool (Claude)
     name = first_arg
     handle_remove_unified(name, resource_type, global_install)
