@@ -438,6 +438,45 @@ class AgrConfig:
         """Return all remote GitHub dependencies."""
         return [d for d in self.dependencies if d.is_remote]
 
+    def add_tool_target(self, tool_name: str) -> None:
+        """Add a tool to the target tools list.
+
+        Creates the ToolsConfig if it doesn't exist.
+
+        Args:
+            tool_name: Name of the tool to add (e.g., "claude", "cursor")
+        """
+        if self.tools is None:
+            self.tools = ToolsConfig(targets=[])
+
+        if tool_name not in self.tools.targets:
+            self.tools.targets.append(tool_name)
+
+    def remove_tool_target(self, tool_name: str) -> bool:
+        """Remove a tool from the target tools list.
+
+        Args:
+            tool_name: Name of the tool to remove
+
+        Returns:
+            True if removed, False if not found
+        """
+        if self.tools is None or tool_name not in self.tools.targets:
+            return False
+
+        self.tools.targets.remove(tool_name)
+        return True
+
+    def get_tool_targets(self) -> list[str]:
+        """Return the list of configured target tools.
+
+        Returns:
+            List of tool names, or empty list if not configured
+        """
+        if self.tools is None:
+            return []
+        return list(self.tools.targets)
+
 
 def find_config(start_path: Path | None = None) -> Path | None:
     """

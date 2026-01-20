@@ -320,3 +320,120 @@ class ResourceConverter:
             self._field_mappings[key].update(mappings)
         else:
             self._field_mappings[key] = mappings
+
+
+@dataclass
+class CompatibilityIssue:
+    """A compatibility issue for a resource across tools."""
+
+    field_name: str
+    message: str
+    affected_tools: list[str]
+
+
+@dataclass
+class CompatibilityReport:
+    """Report of compatibility issues for a resource."""
+
+    resource_type: str
+    issues: list[CompatibilityIssue] = field(default_factory=list)
+
+    @property
+    def has_issues(self) -> bool:
+        """Return True if there are any compatibility issues."""
+        return len(self.issues) > 0
+
+
+def _find_field_owner(field_name: str, resource_type: str) -> str | None:
+    """Find which tool owns a field for the given resource type."""
+    for tool_name, config in TOOL_CONFIGS.items():
+        if field_name in config.specific_fields.get(resource_type, set()):
+            return tool_name
+    return None
+
+
+def _extract_frontmatter_fields(content: str) -> set[str]:
+    """Extract field names from YAML frontmatter."""
+    if not content.startswith("---"):
+        return set()
+
+    match = re.match(r"^---\s*\n(.*?)\n---\s*\n?", content, re.DOTALL)
+    if not match:
+        return set()
+
+    field_names: set[str] = set()
+    for line in match.group(1).split("\n"):
+        key_match = re.match(r"^([a-zA-Z_-][a-zA-Z0-9_-]*)\s*:", line)
+        if key_match:
+            field_names.add(key_match.group(1))
+    return field_names
+
+
+def check_compatibility(
+    content: str,
+    resource_type: str,
+    target_tools: list[str],
+) -> CompatibilityReport:
+    """Check resource compatibility across target tools.
+
+    Analyzes the resource content for fields that won't be available
+    in some target tools.
+
+    Args:
+        content: Resource content (with optional YAML frontmatter)
+        resource_type: Type of resource (skill, command, agent, rule)
+        target_tools: List of target tools to check against
+
+    Returns:
+        CompatibilityReport with any issues found
+    """
+    report = CompatibilityReport(resource_type=resource_type)
+    field_names = _extract_frontmatter_fields(content)
+
+    for field_name in field_names:
+        source_tool = _find_field_owner(field_name, resource_type)
+        if not source_tool:
+            continue
+
+        # Find target tools that don't support this field
+        incompatible = [t for t in target_tools if t != source_tool]
+        if incompatible:
+            report.issues.append(
+                CompatibilityIssue(
+                    field_name=field_name,
+                    message=f"{source_tool.capitalize()} only (will be ignored in {', '.join(incompatible)})",
+                    affected_tools=incompatible,
+                )
+            )
+
+    return report
+
+
+def check_compatibility_for_path(
+    path: "Path",
+    resource_type: str,
+    target_tools: list[str],
+) -> CompatibilityReport:
+    """Check resource compatibility for a file path.
+
+    Convenience wrapper that reads the file and checks compatibility.
+
+    Args:
+        path: Path to the resource file
+        resource_type: Type of resource (skill, command, agent, rule)
+        target_tools: List of target tools to check against
+
+    Returns:
+        CompatibilityReport with any issues found
+    """
+    # Determine which file to read
+    if path.is_dir():
+        file_to_check = path / "SKILL.md"
+    else:
+        file_to_check = path
+
+    if file_to_check.is_file():
+        content = file_to_check.read_text()
+        return check_compatibility(content, resource_type, target_tools)
+
+    return CompatibilityReport(resource_type=resource_type)

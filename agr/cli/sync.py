@@ -11,16 +11,17 @@ from agr.config import AgrConfig, Dependency, find_config, get_or_create_config
 from agr.exceptions import AgrError, RepoNotFoundError, ResourceNotFoundError, ResourceExistsError
 from agr.fetcher import RESOURCE_CONFIGS, ResourceType, fetch_resource, downloaded_repo, fetch_resource_from_repo_dir
 from agr.github import get_username_from_git_remote
-from agr.resolver import discover_all_repo_resources, ResolvedResource, ResourceSource
+from agr.resolver import discover_all_repo_resources, ResolvedResource
 from agr.cli.common import (
     DEFAULT_REPO_NAME,
     TYPE_TO_SUBDIR,
     console,
     fetch_spinner,
     find_repo_root,
-    get_base_path,
 )
 from agr.cli.paths import remove_path
+from agr.adapters import AdapterRegistry
+from agr.adapters.detector import ToolDetector
 from agr.cli.multi_tool import get_target_adapters, get_tool_base_path, InvalidToolError
 from agr.utils import (
     compute_flattened_resource_name,
@@ -30,6 +31,141 @@ from agr.utils import (
 )
 
 app = typer.Typer()
+
+
+def _interactive_tool_selection(
+    config: AgrConfig,
+    config_path: Path,
+) -> list[str]:
+    """Prompt user to select target tools interactively.
+
+    Called when no tools are configured and none are detected via directories.
+
+    Args:
+        config: Current agr config
+        config_path: Path to save updated config
+
+    Returns:
+        List of selected tool names
+    """
+    # Get all available tools
+    available_tools = AdapterRegistry.all_names()
+    detector = ToolDetector()
+    detected = detector.detect_all()
+
+    console.print()
+    console.print("[yellow]No target tools configured.[/yellow]")
+    console.print("Which tools would you like to sync resources to?")
+    console.print()
+
+    # Display options with detected status
+    tool_info = []
+    for i, tool_name in enumerate(sorted(available_tools), 1):
+        tool_detection = next((t for t in detected if t.name == tool_name), None)
+        has_dir = tool_detection.config_dir is not None if tool_detection else False
+        has_cli = tool_detection.cli_available if tool_detection else False
+
+        status_parts = []
+        if has_dir:
+            status_parts.append("directory exists")
+        if has_cli:
+            status_parts.append("CLI available")
+        status = f" ({', '.join(status_parts)})" if status_parts else ""
+
+        console.print(f"  {i}. {tool_name}{status}")
+        tool_info.append(tool_name)
+
+    console.print()
+
+    # Get user input
+    while True:
+        try:
+            selection = typer.prompt(
+                "Enter selection (comma-separated numbers, e.g., 1,2)",
+                default="1"
+            )
+
+            # Parse selection
+            selected_indices = [int(s.strip()) for s in selection.split(",")]
+            selected_tools = []
+
+            for idx in selected_indices:
+                if idx < 1 or idx > len(tool_info):
+                    console.print(f"[red]Invalid selection: {idx}[/red]")
+                    continue
+                selected_tools.append(tool_info[idx - 1])
+
+            if not selected_tools:
+                console.print("[red]No valid tools selected. Please try again.[/red]")
+                continue
+
+            break
+
+        except ValueError:
+            console.print("[red]Invalid input. Please enter numbers separated by commas.[/red]")
+
+    # Save selection to config
+    for tool_name in selected_tools:
+        config.add_tool_target(tool_name)
+    config.save(config_path)
+
+    console.print()
+    console.print(f"[green]Saved to agr.toml: {', '.join(selected_tools)}[/green]")
+    console.print()
+
+    # Create directories for selected tools if they don't exist
+    for tool_name in selected_tools:
+        adapter = AdapterRegistry.get(tool_name)
+        tool_dir = Path.cwd() / adapter.format.config_dir
+        if not tool_dir.exists():
+            tool_dir.mkdir(parents=True)
+            console.print(f"[dim]Created directory: {adapter.format.config_dir}/[/dim]")
+
+    return selected_tools
+
+
+def _needs_interactive_selection(
+    config: AgrConfig | None,
+    tool_flags: list[str] | None,
+) -> bool:
+    """Check if interactive tool selection is needed.
+
+    Returns True if:
+    - No --tool flags provided (not CI mode)
+    - No tools configured in agr.toml
+    - No tools detected via directories
+    - Running in an interactive TTY
+
+    Args:
+        config: Current agr config (may be None)
+        tool_flags: Tool flags from CLI
+
+    Returns:
+        True if interactive selection is needed
+    """
+    import sys
+
+    # If tool flags provided, no need for interactive selection
+    if tool_flags:
+        return False
+
+    # If tools configured in agr.toml, no need for interactive selection
+    if config and config.tools and config.tools.targets:
+        return False
+
+    # Check if any tools are detected via directories
+    detector = ToolDetector()
+    detected = detector.detect_all()
+    tools_with_dirs = [t for t in detected if t.config_dir is not None]
+
+    if tools_with_dirs:
+        return False
+
+    # Only prompt if running interactively (has a TTY)
+    if not sys.stdin.isatty():
+        return False
+
+    return True
 
 
 @dataclass
@@ -62,6 +198,7 @@ class RepoSyncResult:
     def total_errors(self) -> int:
         """Total number of errors."""
         return len(self.errors)
+
 
 # Mapping from type string to ResourceType enum
 TYPE_STRING_TO_ENUM = {
@@ -559,9 +696,25 @@ def _handle_sync_repo(
             _print_discovered_resources(resources)
             console.print()
 
+            # Load config for interactive selection check
+            config_path_for_repo = find_config()
+            config_for_repo = None
+            if config_path_for_repo:
+                config_for_repo = AgrConfig.load(config_path_for_repo)
+            else:
+                # Create a config path for potential tool selection
+                config_path_for_repo = Path.cwd() / "agr.toml"
+                config_for_repo = AgrConfig()
+
+            # Check if interactive tool selection is needed
+            if _needs_interactive_selection(config_for_repo, tool_flags):
+                _interactive_tool_selection(config_for_repo, config_path_for_repo)
+                # Reload config after selection
+                config_for_repo = AgrConfig.load(config_path_for_repo)
+
             # Get target adapters
             try:
-                adapters = get_target_adapters(config=None, tool_flags=tool_flags)
+                adapters = get_target_adapters(config=config_for_repo, tool_flags=tool_flags)
             except InvalidToolError as e:
                 console.print(f"[red]Error: {e}[/red]")
                 raise typer.Exit(1)
@@ -757,6 +910,12 @@ def sync(
         config.save(config_path)
         console.print("[blue]Migrated agr.toml to new format[/blue]")
 
+    # Check if interactive tool selection is needed
+    if _needs_interactive_selection(config, tool):
+        _interactive_tool_selection(config, config_path)
+        # Reload config after selection
+        config = AgrConfig.load(config_path)
+
     # Get target adapters
     try:
         adapters = get_target_adapters(config=config, tool_flags=tool)
@@ -838,20 +997,52 @@ def _print_tool_sync_summary(tool_name: str, installed: int, updated: int, prune
     console.print(f"  [{tool_name}] {summary}")
 
 
+def _format_count(value: int, color: str) -> str:
+    """Format a count with color if non-zero, dim otherwise."""
+    return f"[{color}]{value}[/{color}]" if value > 0 else "[dim]0[/dim]"
+
+
 def _print_multi_tool_summary(tool_results: dict[str, dict[str, int]]) -> None:
     """Print overall summary for multi-tool sync."""
+    from rich.table import Table
+
     total_installed = sum(r["installed"] for r in tool_results.values())
+    total_updated = sum(r["updated"] for r in tool_results.values())
     total_failed = sum(r["failed"] for r in tool_results.values())
-    tools_synced = len([t for t, r in tool_results.items() if r["installed"] > 0 or r["updated"] > 0])
 
     console.print()
-    if tools_synced > 0:
-        console.print(f"[dim]Summary: Synced to {tools_synced} tool(s), {total_installed} total resources[/dim]")
-    else:
-        console.print("[dim]Nothing to sync across all tools.[/dim]")
 
+    if total_installed == 0 and total_updated == 0 and total_failed == 0:
+        console.print("[dim]Nothing to sync across all tools.[/dim]")
+        return
+
+    table = Table(title="Sync Summary", show_header=True, header_style="bold")
+    table.add_column("Tool", style="cyan")
+    table.add_column("Installed", justify="right")
+    table.add_column("Updated", justify="right")
+    table.add_column("Failed", justify="right")
+
+    for tool_name, results in tool_results.items():
+        table.add_row(
+            tool_name,
+            _format_count(results["installed"], "green"),
+            _format_count(results["updated"], "blue"),
+            _format_count(results["failed"], "red"),
+        )
+
+    console.print(table)
+    console.print()
+
+    parts = []
+    if total_installed > 0:
+        parts.append(f"[green]{total_installed} installed[/green]")
+    if total_updated > 0:
+        parts.append(f"[blue]{total_updated} updated[/blue]")
     if total_failed > 0:
-        console.print(f"[red]{total_failed} total failures[/red]")
+        parts.append(f"[red]{total_failed} failed[/red]")
+
+    if parts:
+        console.print(f"Total: {', '.join(parts)}")
 
 
 def _print_sync_summary(installed: int, updated: int, pruned: int, failed: int) -> None:

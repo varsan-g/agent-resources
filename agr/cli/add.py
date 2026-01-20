@@ -23,6 +23,12 @@ from agr.config import AgrConfig, Dependency, find_config, get_or_create_config
 from agr.fetcher import ResourceType
 from agr.github import get_username_from_git_remote
 from agr.package import parse_package_md, validate_no_nested_packages
+from agr.adapters.converter import check_compatibility_for_path
+from agr.resources import (
+    copy_to_resources,
+    is_in_resources_dir,
+    get_relative_resources_path,
+)
 from agr.utils import (
     compute_flattened_resource_name,
     compute_path_segments,
@@ -327,9 +333,17 @@ def handle_add_local(
     global_install: bool = False,
     workspace: str | None = None,
     tool_flags: list[str] | None = None,
+    force: bool = False,
+    copy_to_resources: bool = False,
 ) -> None:
-    """Handle adding a local resource to agr.toml and installing to target tools."""
-    path = Path(local_path)
+    """Handle adding a local resource to agr.toml and installing to target tools.
+
+    If --copy-to-resources is True and the resource is outside the resources/
+    directory, it will be copied there and agr.toml will reference the
+    resources/ location as the source of truth.
+    """
+    path = Path(local_path).resolve()
+    original_path = local_path
 
     if not path.exists():
         error_exit(f"Path does not exist: {path}")
@@ -362,6 +376,21 @@ def handle_add_local(
         _validate_package(path)
 
     name = path.stem if path.is_file() else path.name
+    copied_to_resources_dir = False
+    resources_path = local_path
+
+    # Optionally copy to resources/ directory if requested and not already there
+    if copy_to_resources and not is_in_resources_dir(path):
+        from agr.resources import copy_to_resources as do_copy_to_resources
+        result = do_copy_to_resources(path, resource_type, name, force=force)
+
+        if not result.success:
+            error_exit(result.error or "Failed to copy resource to resources/")
+
+        # Update path to use resources/ location
+        resources_path = result.relative_path
+        path = result.dest_path
+        copied_to_resources_dir = True
 
     # Get username for namespacing
     repo_root = find_repo_root()
@@ -371,11 +400,11 @@ def handle_add_local(
 
     # Add to agr.toml (to workspace if specified, else to main dependencies)
     config_path, config = get_or_create_config()
-    dep = Dependency(path=local_path, type=resource_type)
+    dep = Dependency(path=resources_path, type=resource_type)
     if workspace:
         config.add_to_workspace(workspace, dep)
     else:
-        config.add_local(local_path, resource_type)
+        config.add_local(resources_path, resource_type)
     config.save(config_path)
 
     # Get target adapters
@@ -397,14 +426,33 @@ def handle_add_local(
         else:
             console.print(f"[green]Added local {resource_type} '{name}'[/green]")
 
-        console.print(f"  path: {local_path}")
-        if workspace:
-            console.print(f"  workspace: {workspace}")
         # Skills use flattened names, commands/agents use nested paths
         if resource_type == "skill":
             console.print(f"  installed to: {config_dir}/{resource_type}s/{installed_name}")
         else:
             console.print(f"  installed to: {config_dir}/{resource_type}s/{username}/{name}")
+
+    # Print source of truth info
+    if copied_to_resources_dir:
+        console.print()
+        console.print(f"[cyan]Source of truth: {resources_path}[/cyan]")
+        console.print(f"[dim]Original at '{original_path}' can be deleted if no longer needed.[/dim]")
+    else:
+        console.print(f"  source: {resources_path}")
+
+    if workspace:
+        console.print(f"  workspace: {workspace}")
+
+    # Check compatibility across target tools
+    if len(adapters) > 1 and resource_type not in ("package",):
+        target_tools = [a.format.name for a in adapters]
+        compat_report = check_compatibility_for_path(path, resource_type, target_tools)
+
+        if compat_report.has_issues:
+            console.print()
+            console.print("[yellow]Note: This resource uses features not available in all target tools:[/yellow]")
+            for issue in compat_report.issues:
+                console.print(f"  - {issue.field_name}: {issue.message}")
 
 
 def handle_add_directory(
@@ -638,6 +686,21 @@ def add_unified(
             help="Target tool(s) to install to (e.g., --tool claude --tool cursor)",
         ),
     ] = None,
+    force: Annotated[
+        bool,
+        typer.Option(
+            "--force",
+            "-f",
+            help="Overwrite existing resource in resources/ directory",
+        ),
+    ] = False,
+    copy_to_resources: Annotated[
+        bool,
+        typer.Option(
+            "--copy-to-resources",
+            help="Copy local resources to resources/ directory as source of truth",
+        ),
+    ] = False,
 ) -> None:
     """Add a resource from a GitHub repository or local path.
 
@@ -650,6 +713,7 @@ def add_unified(
     Auto-detects the resource type (skill, command, agent, package, or bundle).
     Use --type to explicitly specify when needed.
     Use --tool to specify target tools (defaults to config or auto-detect).
+    Use --copy-to-resources to copy local resources to resources/ directory.
 
     Examples:
       agr add kasperjunge/hello-world
@@ -659,6 +723,8 @@ def add_unified(
       agr add ./commands/deploy.md --tool claude --tool cursor
       agr add ./commands/*.md
       agr add ./packages/my-toolkit --type package
+      agr add ./my-skill --force          # Overwrite existing in resources/
+      agr add ./my-skill --copy-to-resources  # Copy to resources/ directory
     """
     # Extract options from args if captured there (happens when options come after ref)
     cleaned_args, resource_type, to_package, workspace, tool = extract_options_from_args(
@@ -674,7 +740,7 @@ def add_unified(
     if len(local_paths) > 1:
         # Shell expanded a glob pattern, process all local paths
         for local_path in local_paths:
-            handle_add_local(local_path, resource_type, global_install, workspace, tool)
+            handle_add_local(local_path, resource_type, global_install, workspace, tool, force, copy_to_resources)
         return
 
     first_arg = cleaned_args[0]
@@ -686,7 +752,7 @@ def add_unified(
 
     # Handle local paths
     if is_local_path(first_arg):
-        handle_add_local(first_arg, resource_type, global_install, workspace, tool)
+        handle_add_local(first_arg, resource_type, global_install, workspace, tool, force, copy_to_resources)
         return
 
     # Handle deprecated subcommand syntax: agr add skill <ref>
