@@ -11,7 +11,6 @@ These tests use the committed test resources to verify:
 
 from pathlib import Path
 
-import pytest
 from typer.testing import CliRunner
 
 from agr.cli.main import app
@@ -21,11 +20,9 @@ from agr.utils import (
     update_skill_md_name,
 )
 
-
-runner = CliRunner()
-
-# Path to committed test resources
 RESOURCES_PATH = Path(__file__).parent.parent / "resources"
+PACKAGES_PATH = RESOURCES_PATH / "packages"
+runner = CliRunner()
 
 
 class TestSkillDiscoveryFixtures:
@@ -192,81 +189,46 @@ class TestPackageDiscoveryFixtures:
 class TestPackageExplosionFixtures:
     """Test package explosion using committed fixtures."""
 
-    def test_explodes_simple_package(self, tmp_path, monkeypatch):
+    def test_explodes_simple_package(self, git_project):
         """Test _test-simple package explodes to correct structure."""
-        monkeypatch.chdir(tmp_path)
-        (tmp_path / ".git").mkdir()
-
-        pkg_path = RESOURCES_PATH / "packages" / "_test-simple"
+        pkg_path = PACKAGES_PATH / "_test-simple"
 
         result = runner.invoke(app, ["add", str(pkg_path), "--type", "package"])
 
         assert result.exit_code == 0
 
-        # Verify skill was installed with flattened name
-        installed = (
-            tmp_path / ".claude" / "skills" / "local:_test-simple:simple-skill" / "SKILL.md"
-        )
+        installed = git_project / ".claude" / "skills" / "local:test-simple:simple-skill" / "SKILL.md"
         assert installed.exists()
 
-        # Verify name was updated in SKILL.md
         content = installed.read_text()
-        assert "name: local:_test-simple:simple-skill" in content
+        assert "name: local:test-simple:simple-skill" in content
 
-    def test_explodes_complete_package(self, tmp_path, monkeypatch):
+    def test_explodes_complete_package(self, git_project):
         """Test _test-complete package explodes all resource types."""
-        monkeypatch.chdir(tmp_path)
-        (tmp_path / ".git").mkdir()
-
-        pkg_path = RESOURCES_PATH / "packages" / "_test-complete"
+        pkg_path = PACKAGES_PATH / "_test-complete"
 
         result = runner.invoke(app, ["add", str(pkg_path), "--type", "package"])
 
         assert result.exit_code == 0
 
-        # Verify skills installed with flattened names
-        assert (
-            tmp_path / ".claude" / "skills" / "local:_test-complete:alpha" / "SKILL.md"
-        ).exists()
-        assert (
-            tmp_path / ".claude" / "skills" / "local:_test-complete:beta" / "SKILL.md"
-        ).exists()
+        assert (git_project / ".claude" / "skills" / "local:test-complete:alpha" / "SKILL.md").exists()
+        assert (git_project / ".claude" / "skills" / "local:test-complete:beta" / "SKILL.md").exists()
+        assert (git_project / ".claude" / "commands" / "local" / "test-complete" / "pkg-cmd.md").exists()
+        assert (git_project / ".claude" / "agents" / "local" / "test-complete" / "pkg-agent.md").exists()
 
-        # Verify command installed (in package subdirectory)
-        assert (
-            tmp_path / ".claude" / "commands" / "local" / "_test-complete" / "pkg-cmd.md"
-        ).exists()
-
-        # Verify agent installed (in package subdirectory)
-        assert (
-            tmp_path / ".claude" / "agents" / "local" / "_test-complete" / "pkg-agent.md"
-        ).exists()
-
-    def test_explodes_nested_skills_package(self, tmp_path, monkeypatch):
+    def test_explodes_nested_skills_package(self, git_project):
         """Test _test-nested-skills creates flattened skill names."""
-        monkeypatch.chdir(tmp_path)
-        (tmp_path / ".git").mkdir()
-
-        pkg_path = RESOURCES_PATH / "packages" / "_test-nested-skills"
+        pkg_path = PACKAGES_PATH / "_test-nested-skills"
 
         result = runner.invoke(app, ["add", str(pkg_path), "--type", "package"])
 
         assert result.exit_code == 0
 
-        # Verify nested skills installed with flattened names
         assert (
-            tmp_path
-            / ".claude"
-            / "skills"
-            / "local:_test-nested-skills:category:cat-skill-one"
-            / "SKILL.md"
+            git_project / ".claude" / "skills" / "local:test-nested-skills:category:cat-skill-one" / "SKILL.md"
         ).exists()
         assert (
-            tmp_path
-            / ".claude"
-            / "skills"
-            / "local:_test-nested-skills:category:cat-skill-two"
-            / "SKILL.md"
+            git_project / ".claude" / "skills" / "local:test-nested-skills:category:cat-skill-two" / "SKILL.md"
         ).exists()
 
 
@@ -313,19 +275,15 @@ class TestNameFlatteningFixtures:
         flattened = compute_flattened_skill_name("local", segments)
         assert flattened == "local:_test:nested-category:deep:deeply-nested-skill"
 
-    def test_add_flat_skill_uses_flattened_name(self, tmp_path, monkeypatch):
+    def test_add_flat_skill_uses_flattened_name(self, git_project):
         """Test adding flat-skill installs to flattened directory."""
-        monkeypatch.chdir(tmp_path)
-        (tmp_path / ".git").mkdir()
-
         skill_path = RESOURCES_PATH / "skills" / "_test" / "flat-skill"
 
         result = runner.invoke(app, ["add", str(skill_path)])
 
         assert result.exit_code == 0
 
-        # Verify installed with flattened name
-        installed = tmp_path / ".claude" / "skills" / "local:_test:flat-skill" / "SKILL.md"
+        installed = git_project / ".claude" / "skills" / "local:_test:flat-skill" / "SKILL.md"
         assert installed.exists()
 
 
@@ -351,31 +309,19 @@ class TestFrontmatterFixtures:
         assert "- test-frontmatter" in content
         assert "- frontmatter-example" in content
 
-    def test_updates_name_field_on_install(self, tmp_path, monkeypatch):
+    def test_updates_name_field_on_install(self, git_project):
         """Test name field in frontmatter is updated to flattened name on install."""
-        monkeypatch.chdir(tmp_path)
-        (tmp_path / ".git").mkdir()
-
         skill_path = RESOURCES_PATH / "skills" / "_test" / "skill-with-frontmatter"
 
         result = runner.invoke(app, ["add", str(skill_path)])
 
         assert result.exit_code == 0
 
-        # Verify installed SKILL.md has updated name
-        installed = (
-            tmp_path
-            / ".claude"
-            / "skills"
-            / "local:_test:skill-with-frontmatter"
-            / "SKILL.md"
-        )
+        installed = git_project / ".claude" / "skills" / "local:_test:skill-with-frontmatter" / "SKILL.md"
         assert installed.exists()
 
         content = installed.read_text()
-        # Name should be updated to flattened version
         assert "name: local:_test:skill-with-frontmatter" in content
-        # Other frontmatter should be preserved
         assert "description:" in content
         assert "triggers:" in content
 
@@ -408,58 +354,28 @@ class TestFrontmatterFixtures:
 class TestAddNestedSkillFixtures:
     """Test adding nested skills from fixtures."""
 
-    def test_add_nested_skill_a(self, tmp_path, monkeypatch):
+    def test_add_nested_skill_a(self, git_project):
         """Test adding nested-skill-a from fixtures."""
-        monkeypatch.chdir(tmp_path)
-        (tmp_path / ".git").mkdir()
-
-        skill_path = (
-            RESOURCES_PATH / "skills" / "_test" / "nested-category" / "nested-skill-a"
-        )
+        skill_path = RESOURCES_PATH / "skills" / "_test" / "nested-category" / "nested-skill-a"
 
         result = runner.invoke(app, ["add", str(skill_path)])
 
         assert result.exit_code == 0
 
-        # Verify installed with flattened name
-        installed = (
-            tmp_path
-            / ".claude"
-            / "skills"
-            / "local:_test:nested-category:nested-skill-a"
-            / "SKILL.md"
-        )
+        installed = git_project / ".claude" / "skills" / "local:_test:nested-category:nested-skill-a" / "SKILL.md"
         assert installed.exists()
 
-    def test_add_deeply_nested_skill(self, tmp_path, monkeypatch):
+    def test_add_deeply_nested_skill(self, git_project):
         """Test adding deeply-nested-skill from fixtures."""
-        monkeypatch.chdir(tmp_path)
-        (tmp_path / ".git").mkdir()
-
-        skill_path = (
-            RESOURCES_PATH
-            / "skills"
-            / "_test"
-            / "nested-category"
-            / "deep"
-            / "deeply-nested-skill"
-        )
+        skill_path = RESOURCES_PATH / "skills" / "_test" / "nested-category" / "deep" / "deeply-nested-skill"
 
         result = runner.invoke(app, ["add", str(skill_path)])
 
         assert result.exit_code == 0
 
-        # Verify installed with flattened name
-        installed = (
-            tmp_path
-            / ".claude"
-            / "skills"
-            / "local:_test:nested-category:deep:deeply-nested-skill"
-            / "SKILL.md"
-        )
+        installed = git_project / ".claude" / "skills" / "local:_test:nested-category:deep:deeply-nested-skill" / "SKILL.md"
         assert installed.exists()
 
-        # Verify name in SKILL.md
         content = installed.read_text()
         assert "name: local:_test:nested-category:deep:deeply-nested-skill" in content
 
