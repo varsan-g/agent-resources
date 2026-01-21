@@ -6,7 +6,7 @@ from pathlib import Path
 
 import typer
 
-from agr.config import AgrConfig, Dependency, get_or_create_config
+from agr.config import AgrConfig, Dependency, get_or_create_config, find_config
 from agr.exceptions import (
     AgrError,
     BundleNotFoundError,
@@ -46,6 +46,42 @@ from agr.cli.paths import (
     parse_resource_ref,
 )
 from agr.cli.discovery import discover_local_resource_type
+from agr.cli.multi_tool import (
+    get_target_adapters,
+    get_target_adapters_with_persistence,
+    get_tool_base_path,
+    needs_interactive_selection,
+    interactive_tool_selection,
+    InvalidToolError,
+)
+
+
+def _load_config_for_multi_tool() -> tuple[Path, AgrConfig]:
+    """Load or create config for multi-tool operations.
+
+    Returns:
+        Tuple of (config_path, config)
+    """
+    config_path = find_config()
+    if config_path:
+        return config_path, AgrConfig.load(config_path)
+    return Path.cwd() / "agr.toml", AgrConfig()
+
+
+def _print_add_success(
+    resource_type: str,
+    name: str,
+    username: str,
+    repo_name: str,
+    adapter_count: int,
+    adapter_display_name: str,
+    source: ResourceSource | None = None,
+) -> None:
+    """Print success message for adding a resource, adapting for single vs multi-tool."""
+    if adapter_count > 1:
+        console.print(f"[green]Added {resource_type} '{name}' to {adapter_display_name}[/green]")
+    else:
+        print_success_message(resource_type, name, username, repo_name, source=source)
 
 # Mapping from type string to (ResourceType, subdir) tuple
 # Used by unified handlers for explicit type resolution
@@ -443,6 +479,7 @@ def handle_add_bundle(
     bundle_ref: str,
     overwrite: bool = False,
     global_install: bool = False,
+    tool_flags: list[str] | None = None,
 ) -> None:
     """
     Handler for adding a bundle of resources.
@@ -451,23 +488,49 @@ def handle_add_bundle(
         bundle_ref: Bundle reference (e.g., "username/bundle-name")
         overwrite: Whether to overwrite existing resources
         global_install: If True, install to ~/.claude/, else to ./.claude/
+        tool_flags: Optional list of tool names from CLI --tool flags
     """
     try:
         username, repo_name, bundle_name, _path_segments = parse_resource_ref(bundle_ref)
     except typer.BadParameter as e:
         error_exit(str(e))
 
-    dest_base = get_base_path(global_install)
+    config_path, config = _load_config_for_multi_tool()
+
+    # Check if interactive tool selection is needed (skip for global installs)
+    if not global_install and needs_interactive_selection(config, tool_flags):
+        interactive_tool_selection(config, config_path)
+        config = AgrConfig.load(config_path)
+
+    # Get target adapters with persistence
+    try:
+        adapters = get_target_adapters_with_persistence(
+            config=config,
+            config_path=config_path if not global_install else None,
+            tool_flags=tool_flags,
+            persist_auto_detected=not global_install,
+        )
+    except InvalidToolError as e:
+        error_exit(str(e))
 
     try:
         with fetch_spinner():
-            result = fetch_bundle(username, repo_name, bundle_name, dest_base, overwrite)
+            # Install to each target tool
+            for adapter in adapters:
+                dest_base = get_tool_base_path(adapter, global_install)
+                result = fetch_bundle(username, repo_name, bundle_name, dest_base, overwrite)
 
-        if result.total_installed == 0 and result.total_skipped > 0:
-            console.print(f"[yellow]No new resources installed from bundle '{bundle_name}'.[/yellow]")
-            console.print("[yellow]All resources already exist. Use --overwrite to replace.[/yellow]")
-        else:
-            print_bundle_success_message(bundle_name, result, username, repo_name)
+                if result.total_installed == 0 and result.total_skipped > 0:
+                    if len(adapters) > 1:
+                        console.print(f"[yellow]No new resources installed from bundle '{bundle_name}' to {adapter.format.display_name}.[/yellow]")
+                    else:
+                        console.print(f"[yellow]No new resources installed from bundle '{bundle_name}'.[/yellow]")
+                        console.print("[yellow]All resources already exist. Use --overwrite to replace.[/yellow]")
+                else:
+                    if len(adapters) > 1:
+                        console.print(f"[green]Added bundle '{bundle_name}' to {adapter.format.display_name}[/green]")
+                    else:
+                        print_bundle_success_message(bundle_name, result, username, repo_name)
 
     except (RepoNotFoundError, BundleNotFoundError, AgrError) as e:
         error_exit(str(e))
@@ -537,40 +600,74 @@ def handle_add_unified(
     resource_type: str | None = None,
     overwrite: bool = False,
     global_install: bool = False,
+    tool_flags: list[str] | None = None,
 ) -> None:
     """
     Unified handler for adding any resource with auto-detection.
 
     Installs resources to namespaced paths (.claude/skills/username/name/)
-    and tracks them in agr.toml.
+    and tracks them in agr.toml. Supports multi-tool installation.
 
     Args:
         resource_ref: Resource reference (e.g., "username/resource-name")
         resource_type: Optional explicit type ("skill", "command", "agent", "bundle")
         overwrite: Whether to overwrite existing resource
         global_install: If True, install to ~/.claude/, else to ./.claude/
+        tool_flags: Optional list of tool names from CLI --tool flags
     """
     try:
         username, repo_name, name, path_segments = parse_resource_ref(resource_ref)
     except typer.BadParameter as e:
         error_exit(str(e))
 
-    # Build dependency ref for agr.toml
     dep_ref = _build_dependency_ref(username, repo_name, name)
+    config_path, config = _load_config_for_multi_tool()
 
-    # If explicit type provided, delegate to specific handler
+    # Check if interactive tool selection is needed (skip for global installs)
+    if not global_install and needs_interactive_selection(config, tool_flags):
+        interactive_tool_selection(config, config_path)
+        config = AgrConfig.load(config_path)
+
+    # Get target adapters with persistence
+    try:
+        adapters = get_target_adapters_with_persistence(
+            config=config,
+            config_path=config_path if not global_install else None,
+            tool_flags=tool_flags,
+            persist_auto_detected=not global_install,  # Don't persist for global installs
+        )
+    except InvalidToolError as e:
+        error_exit(str(e))
+
+    # If explicit type provided, delegate to specific handler (with multi-tool support)
     if resource_type:
         type_lower = resource_type.lower()
 
         if type_lower == "bundle":
-            handle_add_bundle(resource_ref, overwrite, global_install)
+            handle_add_bundle(resource_ref, overwrite, global_install, tool_flags)
             return
 
         if type_lower not in RESOURCE_TYPE_MAP:
             error_exit(f"Unknown resource type '{resource_type}'. Use: skill, command, agent, or bundle.")
 
         res_type, subdir = RESOURCE_TYPE_MAP[type_lower]
-        handle_add_resource(resource_ref, res_type, subdir, overwrite, global_install, username=username)
+        for adapter in adapters:
+            dest_base = get_tool_base_path(adapter, global_install)
+            dest = dest_base / subdir
+
+            try:
+                with fetch_spinner():
+                    fetch_resource(
+                        username, repo_name, name, path_segments, dest, res_type, overwrite,
+                        username=username,
+                    )
+                _print_add_success(
+                    res_type.value, name, username, repo_name,
+                    len(adapters), adapter.format.display_name,
+                )
+            except (RepoNotFoundError, ResourceNotFoundError, ResourceExistsError, AgrError) as e:
+                error_exit(str(e))
+
         _add_to_agr_toml(dep_ref, res_type, global_install)
         return
 
@@ -583,26 +680,31 @@ def handle_add_unified(
 
                 if resolved and resolved.source in (ResourceSource.AGR_TOML, ResourceSource.REPO_ROOT):
                     # Resource found in agr.toml or auto-discovered in repo - use explicit path
-                    dest_base = get_base_path(global_install)
-
                     if resolved.is_package:
-                        # Package handling
+                        # Package handling - install to all target tools
                         bundle_name = path_segments[-1] if path_segments else name
-                        result = fetch_bundle_from_repo_dir(repo_dir, bundle_name, dest_base, overwrite)
-                        print_bundle_success_message(bundle_name, result, username, repo_name)
+                        for adapter in adapters:
+                            dest_base = get_tool_base_path(adapter, global_install)
+                            result = fetch_bundle_from_repo_dir(repo_dir, bundle_name, dest_base, overwrite)
+                            if len(adapters) > 1:
+                                console.print(f"[green]Added bundle '{bundle_name}' to {adapter.format.display_name}[/green]")
+                            else:
+                                print_bundle_success_message(bundle_name, result, username, repo_name)
                     elif resolved.resource_type:
                         res_config = RESOURCE_CONFIGS[resolved.resource_type]
-                        dest = dest_base / res_config.dest_subdir
-                        fetch_resource_from_repo_dir(
-                            repo_dir, name, path_segments, dest, resolved.resource_type, overwrite,
-                            username=username,
-                            source_path=resolved.path,
-                            package_name=resolved.package_name,
-                        )
-                        print_success_message(
-                            resolved.resource_type.value, name, username, repo_name,
-                            source=resolved.source,
-                        )
+                        for adapter in adapters:
+                            dest_base = get_tool_base_path(adapter, global_install)
+                            dest = dest_base / res_config.dest_subdir
+                            fetch_resource_from_repo_dir(
+                                repo_dir, name, path_segments, dest, resolved.resource_type, overwrite,
+                                username=username,
+                                source_path=resolved.path,
+                                package_name=resolved.package_name,
+                            )
+                            _print_add_success(
+                                resolved.resource_type.value, name, username, repo_name,
+                                len(adapters), adapter.format.display_name, source=resolved.source,
+                            )
                         _add_to_agr_toml(dep_ref, resolved.resource_type, global_install)
                     else:
                         error_exit(f"Resource '{name}' found in agr.toml but has no type.")
@@ -637,28 +739,30 @@ def handle_add_unified(
                         f"Use --type to specify which one to install:\n{examples}"
                     )
 
-                # Install the unique resource from .claude/
-                dest_base = get_base_path(global_install)
-
+                # Install the unique resource from .claude/ to all target tools
                 if discovery.is_bundle:
                     bundle_name = path_segments[-1] if path_segments else name
-                    result = fetch_bundle_from_repo_dir(repo_dir, bundle_name, dest_base, overwrite)
-                    print_bundle_success_message(bundle_name, result, username, repo_name)
-                    # Bundles are deprecated, don't add to agr.toml
+                    for adapter in adapters:
+                        dest_base = get_tool_base_path(adapter, global_install)
+                        result = fetch_bundle_from_repo_dir(repo_dir, bundle_name, dest_base, overwrite)
+                        if len(adapters) > 1:
+                            console.print(f"[green]Added bundle '{bundle_name}' to {adapter.format.display_name}[/green]")
+                        else:
+                            print_bundle_success_message(bundle_name, result, username, repo_name)
                 else:
                     resource = discovery.resources[0]
                     res_config = RESOURCE_CONFIGS[resource.resource_type]
-                    dest = dest_base / res_config.dest_subdir
-                    # Use namespaced path with username
-                    fetch_resource_from_repo_dir(
-                        repo_dir, name, path_segments, dest, resource.resource_type, overwrite,
-                        username=username,
-                    )
-                    print_success_message(
-                        resource.resource_type.value, name, username, repo_name,
-                        source=ResourceSource.CLAUDE_DIR,
-                    )
-                    # Add to agr.toml
+                    for adapter in adapters:
+                        dest_base = get_tool_base_path(adapter, global_install)
+                        dest = dest_base / res_config.dest_subdir
+                        fetch_resource_from_repo_dir(
+                            repo_dir, name, path_segments, dest, resource.resource_type, overwrite,
+                            username=username,
+                        )
+                        _print_add_success(
+                            resource.resource_type.value, name, username, repo_name,
+                            len(adapters), adapter.format.display_name, source=ResourceSource.CLAUDE_DIR,
+                        )
                     _add_to_agr_toml(dep_ref, resource.resource_type, global_install)
 
     except (RepoNotFoundError, ResourceExistsError, BundleNotFoundError, MultipleResourcesFoundError) as e:

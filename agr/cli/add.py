@@ -761,9 +761,8 @@ def add_unified(
         return
 
     # Normal unified add: agr add <ref>
-    # Note: Remote resources currently only support single tool (Claude)
-    # Multi-tool support for remote resources is planned for future
-    handle_add_unified(first_arg, resource_type, overwrite, global_install)
+    # Supports multi-tool installation via --tool flags or auto-detection
+    handle_add_unified(first_arg, resource_type, overwrite, global_install, tool_flags=tool)
 
 
 def _handle_deprecated_add(
