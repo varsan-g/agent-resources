@@ -11,7 +11,7 @@ from agr.config import AgrConfig, Dependency, find_config, get_or_create_config
 from agr.exceptions import AgrError, RepoNotFoundError, ResourceNotFoundError, ResourceExistsError
 from agr.fetcher import RESOURCE_CONFIGS, ResourceType, fetch_resource, downloaded_repo, fetch_resource_from_repo_dir
 from agr.github import get_username_from_git_remote
-from agr.resolver import discover_all_repo_resources, ResolvedResource
+from agr.resolver import discover_all_repo_resources, ResolvedResource, resolve_remote_resource
 from agr.cli.common import (
     DEFAULT_REPO_NAME,
     TYPE_TO_SUBDIR,
@@ -102,6 +102,29 @@ def _parse_dependency_ref(ref: str) -> tuple[str, str, str]:
     if len(parts) == 3:
         return parts[0], parts[1], parts[2]
     raise ValueError(f"Invalid dependency reference: {ref}")
+
+
+def _group_dependencies_by_repo(
+    dependencies: list[Dependency],
+) -> dict[tuple[str, str], list[tuple[Dependency, str]]]:
+    """Group remote dependencies by (username, repo_name) to minimize downloads.
+
+    Args:
+        dependencies: List of Dependency objects from agr.toml
+
+    Returns:
+        Dict mapping (username, repo_name) tuples to lists of (dependency, name) tuples
+    """
+    groups: dict[tuple[str, str], list[tuple[Dependency, str]]] = {}
+    for dep in dependencies:
+        if not dep.handle:
+            continue
+        try:
+            username, repo_name, name = _parse_dependency_ref(dep.handle)
+            groups.setdefault((username, repo_name), []).append((dep, name))
+        except ValueError:
+            continue
+    return groups
 
 
 def _is_resource_installed(
@@ -930,43 +953,65 @@ def _sync_remote_dependencies(
     base_path: Path,
     prune: bool,
 ) -> tuple[int, int, int, int]:
-    """Sync remote dependencies from agr.toml.
+    """Sync remote dependencies using full 3-tier resolution.
+
+    Groups dependencies by repository to minimize downloads, then uses
+    resolve_remote_resource() for each dependency to properly handle
+    resources at non-standard paths (same resolution as `agr add`).
 
     Returns:
         Tuple of (installed, skipped, failed, pruned) counts
     """
     installed_count, skipped_count, failed_count, pruned_count = 0, 0, 0, 0
 
-    for dep in config.get_remote_dependencies():
-        if not dep.handle:
+    repo_groups = _group_dependencies_by_repo(config.get_remote_dependencies())
+
+    for (username, repo_name), deps_in_repo in repo_groups.items():
+        # First pass: check which deps are already installed (before downloading)
+        deps_to_install = []
+        for dep, name in deps_in_repo:
+            resource_type = _type_string_to_enum(dep.type) if dep.type else ResourceType.SKILL
+            if _is_resource_installed(username, name, resource_type, base_path):
+                skipped_count += 1
+            else:
+                deps_to_install.append((dep, name, resource_type))
+
+        # Skip repo download if all deps already installed
+        if not deps_to_install:
             continue
 
         try:
-            username, repo_name, name = _parse_dependency_ref(dep.handle)
-        except ValueError as e:
-            console.print(f"[yellow]Skipping invalid dependency '{dep.handle}': {e}[/yellow]")
-            continue
+            with downloaded_repo(username, repo_name) as repo_dir:
+                for dep, name, resource_type in deps_to_install:
+                    try:
+                        resolved = resolve_remote_resource(repo_dir, name)
 
-        resource_type = _type_string_to_enum(dep.type) if dep.type else ResourceType.SKILL
+                        if not resolved:
+                            console.print(f"[red]Resource '{name}' not found in {username}/{repo_name}[/red]")
+                            failed_count += 1
+                            continue
 
-        if _is_resource_installed(username, name, resource_type, base_path):
-            skipped_count += 1
-            continue
+                        final_type = resolved.resource_type or resource_type
+                        res_config = RESOURCE_CONFIGS[final_type]
+                        dest = base_path / res_config.dest_subdir
 
-        try:
-            res_config = RESOURCE_CONFIGS[resource_type]
-            dest = base_path / res_config.dest_subdir
+                        with fetch_spinner():
+                            fetch_resource_from_repo_dir(
+                                repo_dir, name, [name], dest, final_type,
+                                overwrite=False, username=username,
+                                source_path=resolved.path,
+                                package_name=resolved.package_name,
+                            )
+                        console.print(f"[green]Installed {final_type.value} '{name}'[/green]")
+                        installed_count += 1
 
-            with fetch_spinner():
-                fetch_resource(
-                    username, repo_name, name, [name], dest, resource_type,
-                    overwrite=False, username=username,
-                )
-            console.print(f"[green]Installed {resource_type.value} '{name}'[/green]")
-            installed_count += 1
-        except (RepoNotFoundError, ResourceNotFoundError, AgrError) as e:
-            console.print(f"[red]Failed to install '{dep.handle}': {e}[/red]")
-            failed_count += 1
+                    except (ResourceNotFoundError, ResourceExistsError, AgrError) as e:
+                        console.print(f"[red]Failed to install '{dep.handle}': {e}[/red]")
+                        failed_count += 1
+
+        except RepoNotFoundError:
+            console.print(f"[red]Repository '{username}/{repo_name}' not found[/red]")
+            failed_count += len(deps_to_install)
 
     if prune:
         pruned_count = _prune_unlisted_remote_resources(config, base_path)

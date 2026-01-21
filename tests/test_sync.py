@@ -39,11 +39,17 @@ class TestSyncCommand:
         assert result.exit_code == 0
         assert "nothing to sync" in result.output.lower() or "skipping remote" in result.output.lower()
 
-    @patch("agr.cli.sync.fetch_resource")
+    @patch("agr.cli.sync.downloaded_repo")
+    @patch("agr.cli.sync.resolve_remote_resource")
+    @patch("agr.cli.sync.fetch_resource_from_repo_dir")
     def test_sync_installs_missing_dependencies(
-        self, mock_fetch, tmp_path: Path, monkeypatch
+        self, mock_fetch, mock_resolve, mock_downloaded_repo, tmp_path: Path, monkeypatch
     ):
         """Test that sync installs dependencies from agr.toml."""
+        from contextlib import contextmanager
+        from agr.resolver import ResolvedResource, ResourceSource
+        from agr.fetcher import ResourceType
+
         monkeypatch.chdir(tmp_path)
         (tmp_path / ".git").mkdir()
 
@@ -56,6 +62,27 @@ class TestSyncCommand:
         # Create .claude directory but no installed resources
         (tmp_path / ".claude" / "skills").mkdir(parents=True)
         (tmp_path / ".claude" / "commands").mkdir(parents=True)
+
+        # Setup mock for downloaded_repo context manager
+        @contextmanager
+        def mock_context(username, repo_name):
+            mock_repo_dir = tmp_path / f"mock_repo_{username}"
+            mock_repo_dir.mkdir(exist_ok=True)
+            yield mock_repo_dir
+
+        mock_downloaded_repo.side_effect = mock_context
+
+        # Setup mock for resolve_remote_resource
+        def resolve_mock(repo_dir, name):
+            res_type = ResourceType.SKILL if name == "commit" else ResourceType.COMMAND
+            return ResolvedResource(
+                name=name,
+                resource_type=res_type,
+                path=Path(f".claude/skills/{name}"),
+                source=ResourceSource.CLAUDE_DIR,
+            )
+
+        mock_resolve.side_effect = resolve_mock
 
         result = runner.invoke(app, ["sync"])
 
@@ -137,11 +164,17 @@ class TestSyncCommand:
         # Verify flat-path skill was NOT removed (backward compat)
         assert flat_skill.exists()
 
-    @patch("agr.cli.sync.fetch_resource")
+    @patch("agr.cli.sync.downloaded_repo")
+    @patch("agr.cli.sync.resolve_remote_resource")
+    @patch("agr.cli.sync.fetch_resource_from_repo_dir")
     def test_sync_with_custom_repo_dependency(
-        self, mock_fetch, tmp_path: Path, monkeypatch
+        self, mock_fetch, mock_resolve, mock_downloaded_repo, tmp_path: Path, monkeypatch
     ):
         """Test that sync handles custom repo dependencies."""
+        from contextlib import contextmanager
+        from agr.resolver import ResolvedResource, ResourceSource
+        from agr.fetcher import ResourceType
+
         monkeypatch.chdir(tmp_path)
         (tmp_path / ".git").mkdir()
 
@@ -153,20 +186,43 @@ class TestSyncCommand:
         # Create .claude directory
         (tmp_path / ".claude" / "skills").mkdir(parents=True)
 
+        # Track repo download calls
+        download_calls = []
+
+        @contextmanager
+        def mock_context(username, repo_name):
+            download_calls.append((username, repo_name))
+            mock_repo_dir = tmp_path / "mock_repo"
+            mock_repo_dir.mkdir(exist_ok=True)
+            yield mock_repo_dir
+
+        mock_downloaded_repo.side_effect = mock_context
+
+        mock_resolve.return_value = ResolvedResource(
+            name="commit",
+            resource_type=ResourceType.SKILL,
+            path=Path(".claude/skills/commit"),
+            source=ResourceSource.CLAUDE_DIR,
+        )
+
         result = runner.invoke(app, ["sync"])
 
         # Verify fetch was called with correct repo
-        mock_fetch.assert_called_once()
-        call_args = mock_fetch.call_args[0]
-        # First arg should be username, second should be repo name
-        assert call_args[0] == "kasperjunge"
-        assert call_args[1] == "custom-repo"
+        assert len(download_calls) == 1
+        assert download_calls[0][0] == "kasperjunge"
+        assert download_calls[0][1] == "custom-repo"
 
-    @patch("agr.cli.sync.fetch_resource")
+    @patch("agr.cli.sync.downloaded_repo")
+    @patch("agr.cli.sync.resolve_remote_resource")
+    @patch("agr.cli.sync.fetch_resource_from_repo_dir")
     def test_sync_auto_detects_type(
-        self, mock_fetch, tmp_path: Path, monkeypatch
+        self, mock_fetch, mock_resolve, mock_downloaded_repo, tmp_path: Path, monkeypatch
     ):
         """Test that sync auto-detects type when not specified."""
+        from contextlib import contextmanager
+        from agr.resolver import ResolvedResource, ResourceSource
+        from agr.fetcher import ResourceType
+
         monkeypatch.chdir(tmp_path)
         (tmp_path / ".git").mkdir()
 
@@ -178,7 +234,177 @@ class TestSyncCommand:
         # Create .claude directory
         (tmp_path / ".claude" / "skills").mkdir(parents=True)
 
+        @contextmanager
+        def mock_context(username, repo_name):
+            mock_repo_dir = tmp_path / "mock_repo"
+            mock_repo_dir.mkdir(exist_ok=True)
+            yield mock_repo_dir
+
+        mock_downloaded_repo.side_effect = mock_context
+
+        mock_resolve.return_value = ResolvedResource(
+            name="commit",
+            resource_type=ResourceType.SKILL,
+            path=Path(".claude/skills/commit"),
+            source=ResourceSource.CLAUDE_DIR,
+        )
+
         result = runner.invoke(app, ["sync"])
 
         # Verify fetch was called (auto-detection should handle it)
         mock_fetch.assert_called_once()
+
+
+class TestSyncWithResolver:
+    """Tests for Issue #47: Sync using resolve_remote_resource() for consistent resolution."""
+
+    @patch("agr.cli.sync.downloaded_repo")
+    @patch("agr.cli.sync.resolve_remote_resource")
+    @patch("agr.cli.sync.fetch_resource_from_repo_dir")
+    def test_sync_uses_resolver(
+        self, mock_fetch, mock_resolve, mock_downloaded_repo, tmp_path: Path, monkeypatch
+    ):
+        """Test that sync uses resolve_remote_resource() for each dependency."""
+        from contextlib import contextmanager
+        from agr.resolver import ResolvedResource, ResourceSource
+        from agr.fetcher import ResourceType
+
+        monkeypatch.chdir(tmp_path)
+        (tmp_path / ".git").mkdir()
+
+        # Create agr.toml with dependency
+        config = AgrConfig()
+        config.add_remote("kasperjunge/commit", "skill")
+        config.save(tmp_path / "agr.toml")
+
+        # Create .claude directory
+        (tmp_path / ".claude" / "skills").mkdir(parents=True)
+
+        # Setup mock for downloaded_repo context manager
+        mock_repo_dir = tmp_path / "mock_repo"
+        mock_repo_dir.mkdir()
+
+        @contextmanager
+        def mock_context(*args, **kwargs):
+            yield mock_repo_dir
+
+        mock_downloaded_repo.side_effect = mock_context
+
+        # Setup mock for resolve_remote_resource
+        mock_resolve.return_value = ResolvedResource(
+            name="commit",
+            resource_type=ResourceType.SKILL,
+            path=Path(".claude/skills/commit"),
+            source=ResourceSource.CLAUDE_DIR,
+        )
+
+        result = runner.invoke(app, ["sync"])
+
+        # Verify resolve_remote_resource was called
+        mock_resolve.assert_called_once_with(mock_repo_dir, "commit")
+
+    @patch("agr.cli.sync.downloaded_repo")
+    @patch("agr.cli.sync.resolve_remote_resource")
+    @patch("agr.cli.sync.fetch_resource_from_repo_dir")
+    def test_sync_groups_by_repo(
+        self, mock_fetch, mock_resolve, mock_downloaded_repo, tmp_path: Path, monkeypatch
+    ):
+        """Test that sync groups dependencies by repo to minimize downloads."""
+        from contextlib import contextmanager
+        from agr.resolver import ResolvedResource, ResourceSource
+        from agr.fetcher import ResourceType
+
+        monkeypatch.chdir(tmp_path)
+        (tmp_path / ".git").mkdir()
+
+        # Create agr.toml with multiple dependencies from same repo
+        config = AgrConfig()
+        config.add_remote("kasperjunge/commit", "skill")
+        config.add_remote("kasperjunge/review", "skill")
+        config.add_remote("alice/other-skill", "skill")
+        config.save(tmp_path / "agr.toml")
+
+        # Create .claude directory
+        (tmp_path / ".claude" / "skills").mkdir(parents=True)
+
+        # Track how many times each repo is downloaded
+        download_counts = {}
+
+        @contextmanager
+        def mock_context(username, repo_name):
+            key = f"{username}/{repo_name}"
+            download_counts[key] = download_counts.get(key, 0) + 1
+            mock_repo_dir = tmp_path / f"mock_repo_{username}"
+            mock_repo_dir.mkdir(exist_ok=True)
+            yield mock_repo_dir
+
+        mock_downloaded_repo.side_effect = mock_context
+
+        # Setup mock for resolve_remote_resource
+        def resolve_mock(repo_dir, name):
+            return ResolvedResource(
+                name=name,
+                resource_type=ResourceType.SKILL,
+                path=Path(f".claude/skills/{name}"),
+                source=ResourceSource.CLAUDE_DIR,
+            )
+
+        mock_resolve.side_effect = resolve_mock
+
+        result = runner.invoke(app, ["sync"])
+
+        # Verify each repo was only downloaded once (grouped)
+        # kasperjunge should be downloaded once (for both commit and review)
+        # alice should be downloaded once
+        assert download_counts.get("kasperjunge/skills", 0) <= 1
+        assert download_counts.get("alice/skills", 0) <= 1
+
+    @patch("agr.cli.sync.downloaded_repo")
+    @patch("agr.cli.sync.resolve_remote_resource")
+    @patch("agr.cli.sync.fetch_resource_from_repo_dir")
+    def test_sync_with_non_standard_path(
+        self, mock_fetch, mock_resolve, mock_downloaded_repo, tmp_path: Path, monkeypatch
+    ):
+        """Test that sync handles resources at non-standard paths (via resolver)."""
+        from contextlib import contextmanager
+        from agr.resolver import ResolvedResource, ResourceSource
+        from agr.fetcher import ResourceType
+
+        monkeypatch.chdir(tmp_path)
+        (tmp_path / ".git").mkdir()
+
+        # Create agr.toml with dependency
+        config = AgrConfig()
+        config.add_remote("kasperjunge/custom-skill", "skill")
+        config.save(tmp_path / "agr.toml")
+
+        # Create .claude directory
+        (tmp_path / ".claude" / "skills").mkdir(parents=True)
+
+        # Setup mock for downloaded_repo context manager
+        mock_repo_dir = tmp_path / "mock_repo"
+        mock_repo_dir.mkdir()
+
+        @contextmanager
+        def mock_context(*args, **kwargs):
+            yield mock_repo_dir
+
+        mock_downloaded_repo.side_effect = mock_context
+
+        # Setup mock for resolve_remote_resource - return non-standard path
+        custom_path = Path("resources/custom/skills/custom-skill")
+        mock_resolve.return_value = ResolvedResource(
+            name="custom-skill",
+            resource_type=ResourceType.SKILL,
+            path=custom_path,
+            source=ResourceSource.AGR_TOML,
+            package_name="my-package",
+        )
+
+        result = runner.invoke(app, ["sync"])
+
+        # Verify fetch_resource_from_repo_dir was called with the custom path
+        mock_fetch.assert_called_once()
+        call_kwargs = mock_fetch.call_args[1]
+        assert call_kwargs.get("source_path") == custom_path
+        assert call_kwargs.get("package_name") == "my-package"

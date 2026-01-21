@@ -264,3 +264,76 @@ class TestRemoveNamespacedAndToml:
         # Verify agr.toml was updated
         updated_config = AgrConfig.load(tmp_path / "agr.toml")
         assert "alice/review" not in updated_config.dependencies
+
+
+class TestRemoveViaAgrTomlFallback:
+    """Tests for Issue #46: Remove resources via agr.toml fallback when not found locally."""
+
+    @patch("agr.cli.handlers.discover_local_resource_type")
+    @patch("agr.cli.handlers.handle_remove_resource")
+    def test_remove_by_simple_name_finds_via_agr_toml(
+        self, mock_remove, mock_discover, tmp_path: Path, monkeypatch
+    ):
+        """Test that remove finds resource in agr.toml when not found locally."""
+        monkeypatch.chdir(tmp_path)
+        (tmp_path / ".git").mkdir()
+
+        # Create agr.toml with dependency but no local files
+        config = AgrConfig()
+        config.add_remote("kasperjunge/commit", "skill")
+        config.save(tmp_path / "agr.toml")
+
+        # Simulate local discovery returning empty
+        mock_discover.return_value = DiscoveryResult(resources=[])
+
+        result = runner.invoke(app, ["remove", "commit"])
+
+        # Should find via agr.toml fallback and call remove handler
+        mock_remove.assert_called_once()
+        call_args = mock_remove.call_args
+        assert call_args[0][0] == "commit"  # resource name
+        assert call_args[0][1] == ResourceType.SKILL
+
+    @patch("agr.cli.handlers.discover_local_resource_type")
+    @patch("agr.cli.handlers.handle_remove_resource")
+    def test_remove_by_handle_finds_via_agr_toml(
+        self, mock_remove, mock_discover, tmp_path: Path, monkeypatch
+    ):
+        """Test that remove by full handle finds resource in agr.toml."""
+        monkeypatch.chdir(tmp_path)
+        (tmp_path / ".git").mkdir()
+
+        # Create agr.toml with dependency but no local files
+        config = AgrConfig()
+        config.add_remote("kasperjunge/commit", "skill")
+        config.save(tmp_path / "agr.toml")
+
+        # Simulate local discovery returning empty
+        mock_discover.return_value = DiscoveryResult(resources=[])
+
+        result = runner.invoke(app, ["remove", "kasperjunge/commit"])
+
+        # Should find via agr.toml fallback and call remove handler
+        mock_remove.assert_called_once()
+        call_args = mock_remove.call_args
+        assert call_args[0][0] == "commit"  # simple name
+        assert call_args[0][1] == ResourceType.SKILL
+
+    @patch("agr.cli.handlers.discover_local_resource_type")
+    def test_remove_error_mentions_agr_toml(self, mock_discover, tmp_path: Path, monkeypatch):
+        """Test that error message mentions agr.toml in search locations."""
+        monkeypatch.chdir(tmp_path)
+        (tmp_path / ".git").mkdir()
+
+        # Create empty agr.toml (no matching dependency)
+        config = AgrConfig()
+        config.save(tmp_path / "agr.toml")
+
+        # Simulate local discovery returning empty
+        mock_discover.return_value = DiscoveryResult(resources=[])
+
+        result = runner.invoke(app, ["remove", "nonexistent"])
+
+        assert result.exit_code == 1
+        assert "not found" in result.output.lower()
+        assert "agr.toml" in result.output

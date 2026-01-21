@@ -31,7 +31,7 @@ from agr.fetcher import (
     fetch_resource_from_repo_dir,
     remove_bundle,
 )
-from agr.handle import parse_handle
+from agr.handle import parse_handle, ParsedHandle
 from agr.resolver import resolve_remote_resource, ResourceSource
 
 from agr.cli.paths import (
@@ -771,6 +771,52 @@ def handle_add_unified(
         error_exit(str(e))
 
 
+def _find_resource_via_agr_toml(
+    parsed: ParsedHandle,
+    global_install: bool,
+) -> DiscoveredResource | None:
+    """Look up resource in agr.toml when filesystem discovery fails.
+
+    This is a fallback for `agr remove` when the resource isn't found locally
+    but may still be tracked in agr.toml (e.g., remote dependencies that
+    were never installed or have been manually deleted).
+
+    Args:
+        parsed: Parsed handle from the resource name
+        global_install: Whether to search global config (not supported)
+
+    Returns:
+        DiscoveredResource if found in agr.toml, None otherwise
+    """
+    if global_install:
+        return None
+
+    config_path = find_config()
+    if not config_path:
+        return None
+
+    config = AgrConfig.load(config_path)
+    type_mapping = {
+        "skill": ResourceType.SKILL,
+        "command": ResourceType.COMMAND,
+        "agent": ResourceType.AGENT,
+    }
+
+    for dep in config.get_remote_dependencies():
+        if not dep.handle:
+            continue
+        if parsed.matches_toml_handle(dep.handle):
+            dep_parsed = parse_handle(dep.handle)
+            resource_type = type_mapping.get(dep.type.lower(), ResourceType.SKILL) if dep.type else ResourceType.SKILL
+            return DiscoveredResource(
+                name=dep_parsed.simple_name,
+                resource_type=resource_type,
+                path_segments=dep_parsed.path_segments,
+                username=dep_parsed.username,
+            )
+    return None
+
+
 def handle_remove_unified(
     name: str,
     resource_type: str | None = None,
@@ -817,9 +863,15 @@ def handle_remove_unified(
     discovery = discover_local_resource_type(name, global_install)
 
     if discovery.is_empty:
+        # Fallback: check agr.toml for tracked dependency
+        toml_resource = _find_resource_via_agr_toml(parsed, global_install)
+        if toml_resource:
+            discovery.resources.append(toml_resource)
+
+    if discovery.is_empty:
         error_exit(
             f"Resource '{name}' not found locally.\n"
-            f"Searched in: skills, commands, agents."
+            f"Searched in: skills, commands, agents, and agr.toml."
         )
 
     if discovery.is_ambiguous:
