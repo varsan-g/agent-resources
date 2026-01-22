@@ -1,27 +1,57 @@
+# Agent Resources
 
-agr and agrx should always be unified and synced.
+A package manager for AI agents. 
 
-Always include in the plan to write tests for what is implemented
+## Commands
+...
 
-Skills docs:
-https://agentskills.io/specification
-https://opencode.ai/docs/skills
+## Architecture
+...
+
+## Code Style
+...
+
+## Boundaries
+
+### Always Do
+- agr and agrx should always be unified and synced.
+- include in the plan to write tests for what is implemented
+
+### Ask First
+...
+
+### Never Do
+...
+
+## Security
+...
+
+# Docs
+
+General
+https://agentskills.io/
+https://agents.md/
+
+Claude Code:
 https://code.claude.com/docs/en/skills
-https://developers.openai.com/codex/skills
+https://code.claude.com/docs/en/slash-commands
+https://code.claude.com/docs/en/sub-agents
+https://code.claude.com/docs/en/memory
+
+Cursor:
 https://cursor.com/docs/context/skills
+https://cursor.com/docs/context/commands
+https://cursor.com/docs/context/subagents
+https://cursor.com/docs/context/rules
+
+GitHub Copilot:
 https://docs.github.com/en/copilot/concepts/agents/about-agent-skills
 
-Slash commands / prompts docs:
-https://code.claude.com/docs/en/slash-commands
-https://opencode.ai/docs/commands/
-https://cursor.com/docs/context/commands
+Codex:
+https://developers.openai.com/codex/skills
 https://developers.openai.com/codex/custom-prompts/
 
-Subagents:
-https://cursor.com/docs/context/subagents
-https://code.claude.com/docs/en/sub-agents
+Open Code:
+https://opencode.ai/docs/skills
+https://opencode.ai/docs/commands/
 https://opencode.ai/docs/agents/
-
-Rules:
-https://code.claude.com/docs/en/memory
-https://cursor.com/docs/context/rules
