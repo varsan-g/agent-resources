@@ -4,6 +4,6 @@ dependencies = [
     {handle = "dsjacobsen/golang-pro", type = "skill"},
     {handle = "madsnorgaard/drupal-expert", type = "skill"},
     {handle = "anthropics/skills/skill-creator", type = "skill"},
-    {path = "./skills/migrate-to-skills", type = "skill"},
     {path = "skill-repos/agent-resources-dsjacobsen/.claude/skills/go-api-builder", type = "skill"},
+    {path = "./skills/migrate-to-skills", type = "skill"},
 ]
