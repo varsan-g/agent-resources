@@ -6,6 +6,14 @@ title: Home
 
 A package and project manager for AI agent skills. Install, share, and manage skills from GitHub.
 
+!!! note "Migrating from rules, subagents, or slash commands?"
+    Support for rules, subagents, and slash commands has been removed. Most AI coding agents are converging on skills as the standard format, so agr now focuses exclusively on skills. To convert your existing files to skills, run:
+
+    ```bash
+    agrx kasperjunge/migrate-to-skills
+    agrx kasperjunge/migrate-to-skills -p "convert files in ./my-commands"
+    ```
+
 ## Install
 
 ```bash
