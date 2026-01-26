@@ -97,7 +97,8 @@ def install_skill_from_repo(
     if skill_source is None:
         raise SkillNotFoundError(
             f"Skill '{skill_name}' not found in repository.\n"
-            f"Searched: resources/skills/{skill_name}/, skills/{skill_name}/, {skill_name}/"
+            f"No directory named '{skill_name}' containing SKILL.md was found.\n"
+            f"Hint: Create a skill at 'skills/{skill_name}/SKILL.md' or '{skill_name}/SKILL.md'"
         )
 
     # Determine installed name and destination

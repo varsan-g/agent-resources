@@ -15,6 +15,40 @@ class ResourceType(Enum):
 # Marker file for skills
 SKILL_MARKER = "SKILL.md"
 
+# Directories to exclude from skill discovery
+EXCLUDED_DIRS = {
+    ".git",
+    "node_modules",
+    "__pycache__",
+    ".venv",
+    "venv",
+    ".tox",
+    "vendor",
+    "build",
+    "dist",
+    ".mypy_cache",
+    ".pytest_cache",
+    ".ruff_cache",
+}
+
+
+def _is_excluded_path(path: Path, repo_dir: Path) -> bool:
+    """Check if a path should be excluded from skill discovery.
+
+    Args:
+        path: Path to check
+        repo_dir: Root of the repository (to detect root-level SKILL.md)
+
+    Returns:
+        True if the path should be excluded
+    """
+    # Exclude root-level SKILL.md (parent is the repo itself)
+    if path.parent == repo_dir:
+        return True
+
+    # Exclude paths containing excluded directories
+    return any(part in EXCLUDED_DIRS for part in path.parts)
+
 
 def is_valid_skill_dir(path: Path) -> bool:
     """Check if a directory is a valid skill (contains SKILL.md).
@@ -33,10 +67,12 @@ def is_valid_skill_dir(path: Path) -> bool:
 def find_skill_in_repo(repo_dir: Path, skill_name: str) -> Path | None:
     """Find a skill directory in a downloaded repo.
 
-    Searches for:
-    1. resources/skills/{skill_name}/SKILL.md
-    2. skills/{skill_name}/SKILL.md
-    3. {skill_name}/SKILL.md (root level)
+    Searches recursively for any directory containing SKILL.md where the
+    directory name matches the skill name. Excludes common non-skill
+    directories (.git, node_modules, __pycache__, etc.).
+
+    Results are sorted by path depth (shallowest first) for deterministic
+    behavior when multiple matches exist.
 
     Args:
         repo_dir: Path to extracted repository
@@ -45,47 +81,54 @@ def find_skill_in_repo(repo_dir: Path, skill_name: str) -> Path | None:
     Returns:
         Path to skill directory if found, None otherwise
     """
-    search_paths = [
-        repo_dir / "resources" / "skills" / skill_name,
-        repo_dir / "skills" / skill_name,
-        repo_dir / skill_name,
-    ]
+    matches: list[Path] = []
 
-    for path in search_paths:
-        if is_valid_skill_dir(path):
-            return path
+    for skill_md in repo_dir.rglob(SKILL_MARKER):
+        if _is_excluded_path(skill_md, repo_dir):
+            continue
+        if skill_md.parent.name == skill_name:
+            matches.append(skill_md.parent)
 
-    return None
+    if not matches:
+        return None
+
+    # Return shallowest match for deterministic behavior
+    return min(matches, key=lambda p: len(p.parts))
 
 
 def discover_skills_in_repo(repo_dir: Path) -> list[tuple[str, Path]]:
     """Discover all skills in a repository.
 
+    Finds all directories containing SKILL.md anywhere in the repo,
+    excluding common non-skill directories (.git, node_modules, etc.).
+
+    When duplicate skill names exist, the shallowest path is returned.
+    Results are sorted alphabetically by skill name.
+
     Args:
         repo_dir: Path to extracted repository
 
     Returns:
-        List of (skill_name, skill_path) tuples
+        List of (skill_name, skill_path) tuples, deduplicated by name
     """
-    skills: list[tuple[str, Path]] = []
+    # Collect all skills, keyed by name (shallowest path wins)
+    skills_by_name: dict[str, Path] = {}
 
-    # Search locations
-    search_roots = [
-        repo_dir / "resources" / "skills",
-        repo_dir / "skills",
-        repo_dir,  # Root level skills
-    ]
-
-    for root in search_roots:
-        if not root.exists() or not root.is_dir():
+    for skill_md in repo_dir.rglob(SKILL_MARKER):
+        if _is_excluded_path(skill_md, repo_dir):
             continue
 
-        # Check immediate children for SKILL.md
-        for child in root.iterdir():
-            if child.is_dir() and is_valid_skill_dir(child):
-                skills.append((child.name, child))
+        skill_dir = skill_md.parent
+        skill_name = skill_dir.name
 
-    return skills
+        # Keep shallowest path for duplicate names
+        if skill_name not in skills_by_name:
+            skills_by_name[skill_name] = skill_dir
+        elif len(skill_dir.parts) < len(skills_by_name[skill_name].parts):
+            skills_by_name[skill_name] = skill_dir
+
+    # Return sorted by name for deterministic output
+    return sorted(skills_by_name.items(), key=lambda x: x[0])
 
 
 def update_skill_md_name(skill_dir: Path, new_name: str) -> None:
