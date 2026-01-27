@@ -1,5 +1,6 @@
 .claude/
 .cursor/
+.github/
 
 # Python
 __pycache__/
