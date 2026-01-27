@@ -37,7 +37,7 @@ Before releasing:
             ▼
 ┌─────────────────────────┐
 │ 2. Run quality checks   │
-│    ty → ruff → pytest   │
+│    ruff → pytest        │
 └───────────┬─────────────┘
             │
             ▼
@@ -59,22 +59,14 @@ Before releasing:
             │
             ▼
 ┌─────────────────────────┐
-│ 5. Commit version bump  │
+│ 5. Commit + Tag + Push  │
+│    (triggers workflow)  │
 └───────────┬─────────────┘
             │
             ▼
 ┌─────────────────────────┐
-│ 6. Tag + Push           │
-└───────────┬─────────────┘
-            │
-            ▼
-┌─────────────────────────┐
-│ 7. Create GitHub release│
-└───────────┬─────────────┘
-            │
-            ▼
-┌─────────────────────────┐
-│ 8. Verify release       │
+│ 6. Verify release       │
+│    PyPI + GitHub release│
 └─────────────────────────┘
 ```
 
@@ -94,10 +86,9 @@ If not clean: Run `/commit` first or stash changes.
 ## Step 2: Run Quality Checks
 
 ```bash
-ty                    # Type checking
 ruff check .          # Linting
 ruff format --check . # Format check
-pytest                # Tests
+pytest -m "not e2e and not network and not slow"  # Tests (matches CI)
 ```
 
 **All must pass.** No exceptions - releases with failing tests are forbidden.
@@ -139,21 +130,16 @@ In `CHANGELOG.md`, convert the Unreleased section to a versioned release:
 
 Keep an empty `[Unreleased]` section at the top for future changes.
 
-## Step 5: Commit Version Bump
+## Step 5: Commit, Tag, and Push
 
 ```bash
 git add agr/__init__.py CHANGELOG.md
 git commit -m "$(cat <<'EOF'
 Release vX.Y.Z
 
-Co-Authored-By: Claude <noreply@anthropic.com>
+Co-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>
 EOF
 )"
-```
-
-## Step 6: Tag and Push
-
-```bash
 git tag vX.Y.Z
 git push origin main
 git push origin vX.Y.Z
@@ -161,117 +147,57 @@ git push origin vX.Y.Z
 
 **Order matters:** Push commit first, then tag. This ensures the commit exists on remote before the tag references it.
 
-## Step 7: Create GitHub Release
+**Important:** The tag push triggers the publish workflow which:
+1. Runs quality checks
+2. Builds and publishes to PyPI
+3. Extracts release notes from CHANGELOG.md
+4. Creates GitHub release
 
-Create a GitHub Release at `https://github.com/<owner>/<repo>/releases`.
+## Step 6: Verify Release
 
-This is where release notes live - they're published to GitHub Releases, visible to users browsing the repo. Extract content from CHANGELOG and transform into user-friendly release notes.
-
-### Writing Good Release Notes
-
-**Structure:**
-```markdown
-## What's New in vX.Y.Z
-
-[1-2 sentence summary of the most important change]
-
-### Highlights
-- **Feature Name**: Brief user-facing description (not implementation details)
-
-### Added
-- New capability or feature (from CHANGELOG)
-
-### Changed
-- Modified behavior (from CHANGELOG)
-
-### Fixed
-- Bug fix (from CHANGELOG)
-
-### Breaking Changes
-- Any breaking changes with migration instructions
-```
-
-**Guidelines:**
-- Lead with impact, not implementation
-- Write for users, not developers
-- Include migration steps for breaking changes
-- Link to docs/issues where helpful
-
-**Example:**
-```markdown
-## What's New in v0.7.0
-
-Windows users can now install and manage skills without path issues.
-
-### Highlights
-- **Windows Support**: Skill directories now use `--` separator instead of `:` for full Windows compatibility
-
-### Changed
-- Installed skill directories use `username--skill` format instead of `username:skill`
-- Existing installations are automatically migrated on `agr sync`
-
-### Added
-- Development workflow skills: `/research`, `/discover-solution-space`, `/make-plan`, `/code-review`, `/commit`
-```
-
-### Create the Release
-
-```bash
-gh release create vX.Y.Z \
-  --title "vX.Y.Z" \
-  --notes "$(cat <<'EOF'
-## What's New in vX.Y.Z
-
-[Summary]
-
-### Highlights
-- **Key Feature**: Description
-
-### Added
-- ...
-
-### Changed
-- ...
-
-### Fixed
-- ...
-EOF
-)"
-```
-
-**Source of truth:** Release notes come from CHANGELOG. Don't write them fresh - transform CHANGELOG entries into user-friendly language.
-
-## Step 8: Verify Release
-
-```bash
-gh release view vX.Y.Z        # Verify release exists
-git ls-remote --tags origin   # Verify tag pushed
-gh run list --limit 3         # Check GitHub Actions status
-```
-
-### Verify GitHub Actions Pipeline
+### Watch the Workflow
 
 The tag push triggers `.github/workflows/publish.yml` which:
 1. **Quality checks**: Runs ruff + pytest
-2. **Build**: Creates wheel and sdist with hatch
+2. **Build**: Creates wheel and sdist
 3. **Publish**: Uploads to PyPI via trusted publishing (OIDC)
+4. **Release**: Creates GitHub release from CHANGELOG.md
 
 ```bash
-# Watch the workflow run
-gh run watch
-
-# Or check status
-gh run list --workflow=publish.yml --limit 1
+# Watch the workflow run to completion
+gh run watch --workflow=publish.yml
 ```
 
-### Verify PyPI Publication
+### Verify Everything Succeeded
 
 ```bash
-# Check package is available (may take a few minutes)
+# Verify GitHub release was created
+gh release view vX.Y.Z
+
+# Verify PyPI publication (may take a few minutes)
 pip index versions agr
-
-# Or visit https://pypi.org/project/agr/
 ```
+
+### If Workflow Fails
+
+| Failure Point | Result | Action |
+|---------------|--------|--------|
+| Quality checks | No PyPI, no release | Delete tag (`git push --delete origin vX.Y.Z && git tag -d vX.Y.Z`), fix issue, re-release |
+| PyPI publish | No release created | Fix PyPI config, delete tag (`git push --delete origin vX.Y.Z && git tag -d vX.Y.Z`), re-release |
+| Release creation | PyPI has package, no release | Create release manually (see below) |
+
+**Manual release creation** (if only the release step failed):
+```bash
+VERSION="X.Y.Z"
+gh release create "v$VERSION" --title "v$VERSION" --notes-file <(
+  echo "## What's New in v$VERSION"
+  echo ""
+  awk -v ver="$VERSION" '/^## \[/ { if (found) exit; if ($0 ~ "\\[" ver "\\]") found=1; next } found { print }' CHANGELOG.md
+  echo ""
+  echo "---"
+  echo ""
+  echo "**Full changelog**: https://github.com/kasperjunge/agent-resources/blob/main/CHANGELOG.md"
+)
 
 ## Red Flags - STOP
 
@@ -287,9 +213,9 @@ pip index versions agr
 |---------|-----|
 | Releasing with dirty working tree | Commit or stash first |
 | Skipping tests "we tested earlier" | Run tests immediately before release |
-| Writing release notes from scratch | Extract from CHANGELOG |
 | Forgetting to push the tag | Push tag separately after commit |
-| Not verifying GitHub Actions | Check that PyPI publish triggered |
+| Not watching the workflow | Use `gh run watch` to verify full pipeline |
+| CHANGELOG not updated for version | Add version section before tagging |
 
 ## No Exceptions
 

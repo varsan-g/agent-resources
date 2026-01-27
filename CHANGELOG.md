@@ -2,6 +2,17 @@
 
 ## [Unreleased]
 
+### Changed
+- Release workflow now extracts notes from CHANGELOG.md instead of requiring RELEASE_NOTES.md
+- Workflow checkouts the tag directly (fixes race condition with main branch)
+- Only release job has contents:write permission (security improvement)
+- Added tag format validation in workflow
+- Updated /make-release skill to match new automated workflow (6 steps instead of 8)
+
+### Fixed
+- Shell injection risk in workflow by using environment variables instead of direct interpolation
+- Hardcoded repository URL in release notes now uses GitHub context variables
+
 ## [0.6.4] - 2026-01-27
 
 ### Fixed
