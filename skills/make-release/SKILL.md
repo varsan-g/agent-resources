@@ -25,7 +25,13 @@ Before releasing:
 
 ```
 ┌─────────────────────────┐
-│ 1. Verify clean state   │
+│ 1. Ask for version      │
+│    Patch/Minor/Major?   │
+└───────────┬─────────────┘
+            │
+            ▼
+┌─────────────────────────┐
+│ 2. Verify clean state   │
 │    git status           │
 └───────────┬─────────────┘
             │
@@ -36,7 +42,7 @@ Before releasing:
             │Yes
             ▼
 ┌─────────────────────────┐
-│ 2. Run quality checks   │
+│ 3. Run quality checks   │
 │    ruff → pytest        │
 └───────────┬─────────────┘
             │
@@ -47,30 +53,42 @@ Before releasing:
             │Yes
             ▼
 ┌─────────────────────────┐
-│ 3. Bump version         │
-│    agr/__init__.py      │
+│ 4. Bump version         │
+│    __init__.py +        │
+│    pyproject.toml       │
 └───────────┬─────────────┘
             │
             ▼
 ┌─────────────────────────┐
-│ 4. Update CHANGELOG     │
+│ 5. Update CHANGELOG     │
 │    [Unreleased] → [X.Y.Z]
 └───────────┬─────────────┘
             │
             ▼
 ┌─────────────────────────┐
-│ 5. Commit + Tag + Push  │
+│ 6. Commit + Tag + Push  │
 │    (triggers workflow)  │
 └───────────┬─────────────┘
             │
             ▼
 ┌─────────────────────────┐
-│ 6. Verify release       │
+│ 7. Verify release       │
 │    PyPI + GitHub release│
 └─────────────────────────┘
 ```
 
-## Step 1: Verify Clean State
+## Step 1: Ask for Version Number
+
+**Before doing anything else**, ask the user which version number to release:
+
+Use `AskUserQuestion` with options:
+- **Patch** (X.Y.Z+1): Bug fixes only
+- **Minor** (X.Y+1.0): New features, backward compatible
+- **Major** (X+1.0.0): Breaking changes
+
+Or let them specify a custom version.
+
+## Step 2: Verify Clean State
 
 ```bash
 git status
@@ -83,7 +101,7 @@ git branch --show-current
 
 If not clean: Run `/commit` first or stash changes.
 
-## Step 2: Run Quality Checks
+## Step 3: Run Quality Checks
 
 ```bash
 ruff check .          # Linting
@@ -93,20 +111,29 @@ pytest -m "not e2e and not network and not slow"  # Tests (matches CI)
 
 **All must pass.** No exceptions - releases with failing tests are forbidden.
 
-## Step 3: Bump Version
+## Step 4: Bump Version
 
-Edit `agr/__init__.py`:
+Update version in **both** files:
 
+1. **`agr/__init__.py`**:
 ```python
 __version__ = "X.Y.Z"  # New version
 ```
+
+2. **`pyproject.toml`**:
+```toml
+[project]
+version = "X.Y.Z"  # New version
+```
+
+**Important:** Both files must have the same version number.
 
 **Version format:** Follow [SemVer](https://semver.org/)
 - MAJOR: Breaking changes
 - MINOR: New features (backward compatible)
 - PATCH: Bug fixes
 
-## Step 4: Update CHANGELOG
+## Step 5: Update CHANGELOG
 
 In `CHANGELOG.md`, convert the Unreleased section to a versioned release:
 
@@ -130,10 +157,10 @@ In `CHANGELOG.md`, convert the Unreleased section to a versioned release:
 
 Keep an empty `[Unreleased]` section at the top for future changes.
 
-## Step 5: Commit, Tag, and Push
+## Step 6: Commit, Tag, and Push
 
 ```bash
-git add agr/__init__.py CHANGELOG.md
+git add agr/__init__.py pyproject.toml CHANGELOG.md
 git commit -m "$(cat <<'EOF'
 Release vX.Y.Z
 
@@ -153,7 +180,7 @@ git push origin vX.Y.Z
 3. Extracts release notes from CHANGELOG.md
 4. Creates GitHub release
 
-## Step 6: Verify Release
+## Step 7: Verify Release
 
 ### Watch the Workflow
 
@@ -216,6 +243,7 @@ gh release create "v$VERSION" --title "v$VERSION" --notes-file <(
 | Forgetting to push the tag | Push tag separately after commit |
 | Not watching the workflow | Use `gh run watch` to verify full pipeline |
 | CHANGELOG not updated for version | Add version section before tagging |
+| Only updating `__init__.py` version | Update both `__init__.py` and `pyproject.toml` |
 
 ## No Exceptions
 
