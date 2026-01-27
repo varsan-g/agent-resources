@@ -8,6 +8,8 @@
 - Local skills use `local--skillname` instead of `local:skillname`
 
 ### Added
+- Development workflow skills: `/research`, `/discover-solution-space`, `/make-plan`, `/code-review`, `/make-commit`
+- Skills implement a structured feature development cycle: research → solution exploration → planning → code review → commit
 - Automatic migration of legacy colon-based directories during `agr sync`
 - Validation to reject handles containing reserved `--` sequence
 - Backward compatibility for parsing legacy colon-format installed names
