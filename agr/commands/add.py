@@ -1,7 +1,5 @@
 """agr add command implementation."""
 
-from pathlib import Path
-
 from rich.console import Console
 
 from agr.config import AgrConfig, Dependency, find_config, find_repo_root
@@ -46,15 +44,19 @@ def run_add(refs: list[str], overwrite: bool = False) -> None:
 
             # Add to config
             if handle.is_local:
-                config.add_dependency(Dependency(
-                    type="skill",
-                    path=ref,
-                ))
+                config.add_dependency(
+                    Dependency(
+                        type="skill",
+                        path=ref,
+                    )
+                )
             else:
-                config.add_dependency(Dependency(
-                    type="skill",
-                    handle=handle.to_toml_handle(),
-                ))
+                config.add_dependency(
+                    Dependency(
+                        type="skill",
+                        handle=handle.to_toml_handle(),
+                    )
+                )
 
             results.append((ref, True, str(installed_path)))
 

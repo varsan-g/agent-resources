@@ -117,6 +117,7 @@ class TestParsedHandle:
     def test_to_toml_handle_local(self):
         """to_toml_handle for local path."""
         from pathlib import Path
+
         # Path("./my-skill") normalizes to "my-skill"
         h = ParsedHandle(is_local=True, name="my-skill", local_path=Path("./my-skill"))
         assert h.to_toml_handle() == "my-skill"
@@ -124,7 +125,10 @@ class TestParsedHandle:
     def test_to_toml_handle_local_with_subdir(self):
         """to_toml_handle for local path with subdirectory."""
         from pathlib import Path
-        h = ParsedHandle(is_local=True, name="skill", local_path=Path("./path/to/skill"))
+
+        h = ParsedHandle(
+            is_local=True, name="skill", local_path=Path("./path/to/skill")
+        )
         assert h.to_toml_handle() == "path/to/skill"
 
     def test_to_installed_name_simple(self):
@@ -168,11 +172,16 @@ class TestInstalledNameToTomlHandle:
 
     def test_simple(self):
         """Convert kasperjunge--commit to kasperjunge/commit."""
-        assert installed_name_to_toml_handle("kasperjunge--commit") == "kasperjunge/commit"
+        assert (
+            installed_name_to_toml_handle("kasperjunge--commit") == "kasperjunge/commit"
+        )
 
     def test_with_repo(self):
         """Convert maragudk--skills--collaboration to maragudk/skills/collaboration."""
-        assert installed_name_to_toml_handle("maragudk--skills--collaboration") == "maragudk/skills/collaboration"
+        assert (
+            installed_name_to_toml_handle("maragudk--skills--collaboration")
+            == "maragudk/skills/collaboration"
+        )
 
     def test_local(self):
         """Convert local--my-skill to my-skill."""
@@ -184,11 +193,16 @@ class TestInstalledNameToTomlHandle:
 
     def test_legacy_colon_simple(self):
         """Backward compatibility: colon format still parses (user:skill)."""
-        assert installed_name_to_toml_handle("kasperjunge:commit") == "kasperjunge/commit"
+        assert (
+            installed_name_to_toml_handle("kasperjunge:commit") == "kasperjunge/commit"
+        )
 
     def test_legacy_colon_with_repo(self):
         """Backward compatibility: colon format still parses (user:repo:skill)."""
-        assert installed_name_to_toml_handle("maragudk:skills:collaboration") == "maragudk/skills/collaboration"
+        assert (
+            installed_name_to_toml_handle("maragudk:skills:collaboration")
+            == "maragudk/skills/collaboration"
+        )
 
     def test_legacy_colon_local(self):
         """Backward compatibility: colon format still parses (local:skill)."""

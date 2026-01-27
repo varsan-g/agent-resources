@@ -1,6 +1,5 @@
 """CLI entry point for agrx - temporary skill runner."""
 
-import atexit
 import shutil
 import signal
 import subprocess
@@ -11,7 +10,6 @@ from typing import Annotated, Optional
 import typer
 from rich.console import Console
 
-from agr import __version__
 from agr.config import find_repo_root
 from agr.exceptions import AgrError, InvalidHandleError
 from agr.fetcher import downloaded_repo, install_skill_from_repo
@@ -58,21 +56,24 @@ def main(
     interactive: Annotated[
         bool,
         typer.Option(
-            "--interactive", "-i",
+            "--interactive",
+            "-i",
             help="Start interactive Claude session after running the skill.",
         ),
     ] = False,
     prompt: Annotated[
         Optional[str],
         typer.Option(
-            "--prompt", "-p",
+            "--prompt",
+            "-p",
             help="Prompt to pass to the skill.",
         ),
     ] = None,
     global_install: Annotated[
         bool,
         typer.Option(
-            "--global", "-g",
+            "--global",
+            "-g",
             help="Install to ~/.claude/skills/ instead of ./.claude/skills/.",
         ),
     ] = False,
@@ -123,6 +124,7 @@ def main(
         with downloaded_repo(username, repo_name) as repo_dir:
             # Create a modified handle for the prefixed installation
             from agr.handle import ParsedHandle
+
             temp_handle = ParsedHandle(
                 username=AGRX_PREFIX.rstrip("_"),
                 name=parsed.name,

@@ -93,7 +93,9 @@ class TestCodeExamples:
                     continue
 
                 # Check that bash commands start with a valid command or comment
-                lines = [l.strip() for l in code.strip().split("\n") if l.strip()]
+                lines = [
+                    line.strip() for line in code.strip().split("\n") if line.strip()
+                ]
                 for line in lines:
                     # Skip comments
                     if line.startswith("#"):
@@ -152,9 +154,7 @@ class TestCliCommands:
         commands = set(re.findall(pattern, bash_code))
 
         for cmd in commands:
-            assert cmd in self.KNOWN_COMMANDS, (
-                f"Unknown command documented: agr {cmd}"
-            )
+            assert cmd in self.KNOWN_COMMANDS, f"Unknown command documented: agr {cmd}"
 
     def test_documented_agrx_exists(self):
         """agrx command is documented."""
@@ -180,7 +180,14 @@ class TestContentQuality:
     def test_reference_has_all_commands(self):
         """Reference page documents all main commands."""
         content = (DOCS_DIR / "reference.md").read_text()
-        for cmd in ["agr add", "agr remove", "agr sync", "agr list", "agr init", "agrx"]:
+        for cmd in [
+            "agr add",
+            "agr remove",
+            "agr sync",
+            "agr list",
+            "agr init",
+            "agrx",
+        ]:
             assert cmd in content, f"Missing documentation for {cmd}"
 
     def test_no_broken_next_steps(self):

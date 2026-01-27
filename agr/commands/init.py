@@ -62,7 +62,9 @@ def run_init(skill_name: str | None = None) -> None:
         try:
             skill_path = init_skill(skill_name)
             console.print(f"[green]Created skill scaffold:[/green] {skill_path}")
-            console.print(f"  [dim]Edit {skill_path}/SKILL.md to customize your skill[/dim]")
+            console.print(
+                f"  [dim]Edit {skill_path}/SKILL.md to customize your skill[/dim]"
+            )
         except ValueError as e:
             console.print(f"[red]Error:[/red] {e}")
             raise SystemExit(1)

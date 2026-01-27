@@ -1,7 +1,5 @@
 """agr remove command implementation."""
 
-from pathlib import Path
-
 from rich.console import Console
 
 from agr.config import AgrConfig, find_config, find_repo_root

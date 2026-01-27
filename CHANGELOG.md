@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+## [0.6.3] - 2026-01-27
+
+### Fixed
+- Added dev dependencies (ruff, pytest) to pyproject.toml for CI/CD
+- Fixed linting and formatting issues for ruff compatibility
+
 ## [0.6.2] - 2026-01-27
 
 ### Changed

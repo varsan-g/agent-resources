@@ -11,7 +11,12 @@ import httpx
 
 from agr.exceptions import AgrError, RepoNotFoundError, SkillNotFoundError
 from agr.handle import INSTALLED_NAME_SEPARATOR, ParsedHandle
-from agr.skill import SKILL_MARKER, find_skill_in_repo, is_valid_skill_dir, update_skill_md_name
+from agr.skill import (
+    SKILL_MARKER,
+    find_skill_in_repo,
+    is_valid_skill_dir,
+    update_skill_md_name,
+)
 from agr.tool import DEFAULT_TOOL
 
 
@@ -30,7 +35,9 @@ def downloaded_repo(username: str, repo_name: str) -> Generator[Path, None, None
         RepoNotFoundError: If the repository doesn't exist
         AgrError: If download or extraction fails
     """
-    tarball_url = f"https://github.com/{username}/{repo_name}/archive/refs/heads/main.tar.gz"
+    tarball_url = (
+        f"https://github.com/{username}/{repo_name}/archive/refs/heads/main.tar.gz"
+    )
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         tmp_path = Path(tmp_dir)
@@ -261,7 +268,8 @@ def get_installed_skills(repo_root: Path) -> list[str]:
         return []
 
     return [
-        d.name for d in skills_dir.iterdir()
+        d.name
+        for d in skills_dir.iterdir()
         if d.is_dir() and (d / SKILL_MARKER).exists()
     ]
 

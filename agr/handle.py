@@ -145,7 +145,9 @@ def parse_handle(ref: str) -> ParsedHandle:
     if len(parts) == 2:
         # user/name format
         username, skill_name = parts[0], parts[1]
-        _validate_no_separator_in_components(ref, username=username, skill_name=skill_name)
+        _validate_no_separator_in_components(
+            ref, username=username, skill_name=skill_name
+        )
         return ParsedHandle(
             username=username,
             name=skill_name,
@@ -154,7 +156,9 @@ def parse_handle(ref: str) -> ParsedHandle:
     if len(parts) == 3:
         # user/repo/name format
         username, repo, skill_name = parts[0], parts[1], parts[2]
-        _validate_no_separator_in_components(ref, username=username, repo=repo, skill_name=skill_name)
+        _validate_no_separator_in_components(
+            ref, username=username, repo=repo, skill_name=skill_name
+        )
         return ParsedHandle(
             username=username,
             repo=repo,
@@ -201,7 +205,11 @@ def _validate_no_separator_in_components(
         InvalidHandleError: If any component contains the separator.
     """
     sep = INSTALLED_NAME_SEPARATOR
-    for component, name in [("username", username), ("repo", repo), ("skill name", skill_name)]:
+    for component, name in [
+        ("username", username),
+        ("repo", repo),
+        ("skill name", skill_name),
+    ]:
         if name and sep in name:
             raise InvalidHandleError(
                 f"Invalid handle '{ref}': {component} '{name}' contains reserved sequence '{sep}'"

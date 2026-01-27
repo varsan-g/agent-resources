@@ -57,7 +57,11 @@ def run_list() -> None:
             handle = parse_handle(identifier)
             installed_name = handle.to_installed_name()
             is_installed = is_skill_installed(installed_name, repo_root)
-            status = "[green]installed[/green]" if is_installed else "[yellow]not synced[/yellow]"
+            status = (
+                "[green]installed[/green]"
+                if is_installed
+                else "[yellow]not synced[/yellow]"
+            )
         except Exception:
             status = "[red]invalid[/red]"
 

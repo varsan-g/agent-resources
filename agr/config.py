@@ -152,9 +152,7 @@ class AgrConfig:
             True if removed, False if not found
         """
         original_len = len(self.dependencies)
-        self.dependencies = [
-            d for d in self.dependencies if d.identifier != identifier
-        ]
+        self.dependencies = [d for d in self.dependencies if d.identifier != identifier]
         return len(self.dependencies) < original_len
 
     def get_by_identifier(self, identifier: str) -> Dependency | None:

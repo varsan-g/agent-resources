@@ -5,15 +5,14 @@ import sys
 import pytest
 
 from agr.commands.init import init_config, init_skill
-
-# Windows doesn't allow colons in directory names
-skip_on_windows = pytest.mark.skipif(
-    sys.platform == "win32",
-    reason="Windows doesn't allow colons in directory names"
-)
 from agr.commands.list import run_list
 from agr.config import AgrConfig, Dependency
 from agr.skill import SKILL_MARKER
+
+# Windows doesn't allow colons in directory names
+skip_on_windows = pytest.mark.skipif(
+    sys.platform == "win32", reason="Windows doesn't allow colons in directory names"
+)
 
 
 class TestInitCommand:
@@ -110,6 +109,7 @@ class TestAddRemoveCommands:
 
         # Move skill fixture into the project
         import shutil
+
         local_skill = git_project / "my-skill"
         shutil.copytree(skill_fixture, local_skill)
 
@@ -131,6 +131,7 @@ class TestAddRemoveCommands:
 
         # First add the skill
         import shutil
+
         local_skill = git_project / "my-skill"
         shutil.copytree(skill_fixture, local_skill)
         run_add(["./my-skill"])
@@ -159,7 +160,9 @@ class TestAddRemoveCommands:
         assert config.dependencies[0].handle == "kasperjunge/migrate-to-skills"
 
         # Check installed
-        installed_dir = git_project / ".claude" / "skills" / "kasperjunge--migrate-to-skills"
+        installed_dir = (
+            git_project / ".claude" / "skills" / "kasperjunge--migrate-to-skills"
+        )
         assert installed_dir.exists()
 
 
@@ -182,6 +185,7 @@ class TestSyncCommand:
 
         # Add skill
         import shutil
+
         local_skill = git_project / "my-skill"
         shutil.copytree(skill_fixture, local_skill)
         run_add(["./my-skill"])
@@ -211,7 +215,9 @@ class TestSyncCommand:
 
         # Check migration happened
         assert not old_skill.exists(), "Old colon-based directory should be removed"
-        assert (skills_dir / "user--skill").exists(), "New double-hyphen directory should exist"
+        assert (skills_dir / "user--skill").exists(), (
+            "New double-hyphen directory should exist"
+        )
 
         # Check output
         captured = capsys.readouterr()

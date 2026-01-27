@@ -173,7 +173,9 @@ class TestDownloadedRepo:
         with downloaded_repo("kasperjunge", "agent-resources") as repo_dir:
             assert repo_dir.exists()
             # Should have agr.toml or pyproject.toml
-            assert (repo_dir / "pyproject.toml").exists() or (repo_dir / "agr.toml").exists()
+            assert (repo_dir / "pyproject.toml").exists() or (
+                repo_dir / "agr.toml"
+            ).exists()
 
     @pytest.mark.e2e
     def test_download_nonexistent_raises(self):

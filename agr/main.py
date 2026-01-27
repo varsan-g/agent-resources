@@ -31,7 +31,8 @@ def main(
     version: Annotated[
         Optional[bool],
         typer.Option(
-            "--version", "-v",
+            "--version",
+            "-v",
             help="Show version and exit.",
             callback=version_callback,
             is_eager=True,
@@ -74,7 +75,8 @@ def add(
     overwrite: Annotated[
         bool,
         typer.Option(
-            "--overwrite", "-o",
+            "--overwrite",
+            "-o",
             help="Overwrite existing skills.",
         ),
     ] = False,
