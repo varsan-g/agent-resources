@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.6.2] - 2026-01-27
+
 ### Changed
 - Use `--` separator instead of `:` for installed skill directory names (Windows compatibility)
 - Installed names now use format `username--skill` instead of `username:skill`
