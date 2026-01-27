@@ -6,22 +6,30 @@ from rich.console import Console
 
 from agr.config import AgrConfig, find_config, find_repo_root
 from agr.exceptions import AgrError
-from agr.fetcher import fetch_and_install, is_skill_installed
+from agr.fetcher import fetch_and_install_to_tools, is_skill_installed
 from agr.handle import INSTALLED_NAME_SEPARATOR, LEGACY_SEPARATOR, parse_handle
-from agr.tool import DEFAULT_TOOL
+from agr.skill import SKILL_MARKER
+from agr.tool import ToolConfig
 
 console = Console()
 
 
-def _migrate_legacy_directories(skills_dir: Path) -> None:
+def _migrate_legacy_directories(skills_dir: Path, tool: ToolConfig) -> None:
     """Migrate colon-based directory names to the new separator format.
 
     This ensures backward compatibility with skills installed before
     the Windows-compatible naming scheme was introduced.
 
+    Only applies to flat tools (Claude), not nested tools (Cursor).
+
     Args:
         skills_dir: The skills directory to scan for legacy directories.
+        tool: Tool configuration (migration only for non-nested tools).
     """
+    # Only migrate for flat tools
+    if tool.supports_nested:
+        return
+
     if not skills_dir.exists():
         return
 
@@ -31,7 +39,7 @@ def _migrate_legacy_directories(skills_dir: Path) -> None:
         if LEGACY_SEPARATOR not in skill_dir.name:
             continue
         # Verify it's a skill (has SKILL.md)
-        if not (skill_dir / "SKILL.md").exists():
+        if not (skill_dir / SKILL_MARKER).exists():
             continue
 
         # Convert legacy separator to new separator
@@ -56,17 +64,13 @@ def run_sync() -> None:
 
     Installs all dependencies from agr.toml that aren't already installed.
     Also migrates any legacy colon-based directory names to the new
-    Windows-compatible double-hyphen format.
+    Windows-compatible double-hyphen format (for flat tools only).
     """
     # Find repo root
     repo_root = find_repo_root()
     if repo_root is None:
         console.print("[red]Error:[/red] Not in a git repository")
         raise SystemExit(1)
-
-    # Migrate legacy colon-based directories to new separator format
-    skills_dir = DEFAULT_TOOL.get_skills_dir(repo_root)
-    _migrate_legacy_directories(skills_dir)
 
     # Find config
     config_path = find_config()
@@ -76,11 +80,19 @@ def run_sync() -> None:
 
     config = AgrConfig.load(config_path)
 
+    # Get configured tools
+    tools = config.get_tools()
+
+    # Migrate legacy colon-based directories for flat tools
+    for tool in tools:
+        skills_dir = tool.get_skills_dir(repo_root)
+        _migrate_legacy_directories(skills_dir, tool)
+
     if not config.dependencies:
         console.print("[yellow]No dependencies in agr.toml.[/yellow] Nothing to sync.")
         return
 
-    # Track results
+    # Track results per dependency (not per tool)
     results: list[tuple[str, str, str | None]] = []  # (identifier, status, error)
 
     for dep in config.dependencies:
@@ -94,17 +106,32 @@ def run_sync() -> None:
                 ref = dep.handle or ""
 
             handle = parse_handle(ref)
-            installed_name = handle.to_installed_name()
 
-            # Check if already installed
-            if is_skill_installed(installed_name, repo_root):
+            # Check if already installed in all tools
+            all_installed = all(
+                is_skill_installed(handle, repo_root, tool) for tool in tools
+            )
+
+            if all_installed:
                 results.append((identifier, "up-to-date", None))
                 continue
 
-            # Install
-            fetch_and_install(handle, repo_root, overwrite=False)
+            # Get tools that need installation
+            tools_needing_install = [
+                tool
+                for tool in tools
+                if not is_skill_installed(handle, repo_root, tool)
+            ]
+
+            # Install to all tools that need it (downloads once)
+            fetch_and_install_to_tools(
+                handle, repo_root, tools_needing_install, overwrite=False
+            )
+
             results.append((identifier, "installed", None))
 
+        except FileExistsError as e:
+            results.append((identifier, "error", str(e)))
         except AgrError as e:
             results.append((identifier, "error", str(e)))
         except Exception as e:

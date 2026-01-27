@@ -4,7 +4,7 @@ from rich.console import Console
 
 from agr.config import AgrConfig, Dependency, find_config, find_repo_root
 from agr.exceptions import AgrError, InvalidHandleError
-from agr.fetcher import fetch_and_install
+from agr.fetcher import fetch_and_install_to_tools
 from agr.handle import parse_handle
 
 console = Console()
@@ -31,6 +31,9 @@ def run_add(refs: list[str], overwrite: bool = False) -> None:
     else:
         config = AgrConfig.load(config_path)
 
+    # Get configured tools
+    tools = config.get_tools()
+
     # Track results for summary
     results: list[tuple[str, bool, str]] = []  # (ref, success, message)
 
@@ -39,8 +42,13 @@ def run_add(refs: list[str], overwrite: bool = False) -> None:
             # Parse handle
             handle = parse_handle(ref)
 
-            # Install the skill
-            installed_path = fetch_and_install(handle, repo_root, overwrite)
+            # Install the skill to all configured tools (downloads once)
+            installed_paths_dict = fetch_and_install_to_tools(
+                handle, repo_root, tools, overwrite
+            )
+            installed_paths = [
+                f"{name}: {path}" for name, path in installed_paths_dict.items()
+            ]
 
             # Add to config
             if handle.is_local:
@@ -58,7 +66,7 @@ def run_add(refs: list[str], overwrite: bool = False) -> None:
                     )
                 )
 
-            results.append((ref, True, str(installed_path)))
+            results.append((ref, True, ", ".join(installed_paths)))
 
         except InvalidHandleError as e:
             results.append((ref, False, str(e)))

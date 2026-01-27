@@ -2,7 +2,21 @@
 
 ## [Unreleased]
 
+### Added
+- **Multi-tool support**: Skills can now be installed to multiple AI coding tools simultaneously
+- Cursor tool configuration with nested directory structure (e.g., `.cursor/skills/username/skill/`)
+- `tools` configuration in `agr.toml` to specify target tools: `tools = ["claude", "cursor"]`
+- `fetch_and_install_to_tools()` function for atomic multi-tool installation with rollback
+- Validation that empty tools list raises `ValueError` in `fetch_and_install_to_tools`
+- Type hints to `_get_installation_status` in list command
+
 ### Changed
+- `ParsedHandle` now generates tool-appropriate paths (flat for Claude, nested for Cursor)
+- Commands (`add`, `remove`, `list`, `sync`) now operate on all configured tools
+- Rollback failures in `fetch_and_install_to_tools` now log warnings instead of being silently ignored
+- Extracted common installation logic into `_copy_skill_to_destination` helper (DRY refactor)
+- Tool names in `agr.toml` are now validated at config load time, catching typos early
+- Error messages in `agr remove` now distinguish between "not found" and actual errors
 - Release workflow now extracts notes from CHANGELOG.md instead of requiring RELEASE_NOTES.md
 - Workflow checkouts the tag directly (fixes race condition with main branch)
 - Only release job has contents:write permission (security improvement)
@@ -10,6 +24,7 @@
 - Updated /make-release skill to match new automated workflow (6 steps instead of 8)
 
 ### Fixed
+- Use `SKILL_MARKER` constant instead of hardcoded `"SKILL.md"` string in sync command
 - Shell injection risk in workflow by using environment variables instead of direct interpolation
 - Hardcoded repository URL in release notes now uses GitHub context variables
 

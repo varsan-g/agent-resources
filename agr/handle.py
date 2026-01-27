@@ -7,12 +7,20 @@ Handle formats:
 Installed naming (Windows-compatible using -- separator):
 - Remote: "username--skill" or "username--repo--skill"
 - Local: "local--skillname"
+
+For tools with nested directory support (e.g., Cursor):
+- Remote: username/repo/skill/ or username/skill/
+- Local: local/skillname/
 """
 
 from dataclasses import dataclass
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from agr.exceptions import InvalidHandleError
+
+if TYPE_CHECKING:
+    from agr.tool import ToolConfig
 
 # Separator used in installed directory names (Windows-compatible)
 INSTALLED_NAME_SEPARATOR = "--"
@@ -88,6 +96,42 @@ class ParsedHandle:
         if not self.username:
             raise InvalidHandleError("No username in handle")
         return (self.username, self.repo or "agent-resources")
+
+    def to_skill_path(self, tool: "ToolConfig") -> Path:
+        """Get skill installation path based on tool capabilities.
+
+        Args:
+            tool: Tool configuration determining path structure
+
+        Returns:
+            Path relative to the skills directory.
+            - Flat tools (Claude): Path("local--my-skill") or Path("user--repo--skill")
+            - Nested tools (Cursor): Path("local/my-skill") or Path("user/repo/skill")
+        """
+        if tool.supports_nested:
+            if self.is_local:
+                return Path("local") / self.name
+            if self.repo:
+                return Path(self.username or "") / self.repo / self.name
+            return Path(self.username or "") / self.name
+        else:
+            return Path(self.to_installed_name())
+
+    def get_skill_name_for_tool(self, tool: "ToolConfig") -> str:
+        """Get the SKILL.md name field value for a tool.
+
+        Args:
+            tool: Tool configuration determining naming convention
+
+        Returns:
+            Name to use in SKILL.md frontmatter.
+            - Flat tools (Claude): Full flat name (e.g., "maragudk--skills--bluesky")
+            - Nested tools (Cursor): Just the skill name (e.g., "bluesky")
+        """
+        if tool.supports_nested:
+            return self.name
+        else:
+            return self.to_installed_name()
 
 
 def parse_handle(ref: str) -> ParsedHandle:

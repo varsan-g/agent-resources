@@ -8,6 +8,28 @@ A package manager for AI agents.
 ## Architecture
 ...
 
+## agr.toml Format
+
+The configuration file uses a flat array of dependencies:
+
+```toml
+dependencies = [
+    {handle = "username/repo/skill", type = "skill"},
+    {handle = "username/skill", type = "skill"},
+    {path = "./local/skill", type = "skill"},
+]
+```
+
+Each dependency has:
+- `type`: Always "skill" for now
+- `handle`: Remote GitHub reference (username/repo/skill or username/skill)
+- `path`: Local path (alternative to handle)
+
+Future: A `tools` section will configure which tools to sync to:
+```toml
+tools = ["claude", "cursor"]
+```
+
 ## Code Style
 ...
 
@@ -16,6 +38,7 @@ A package manager for AI agents.
 ### Always Do
 - agr and agrx should always be unified and synced.
 - include in the plan to write tests for what is implemented
+- Save all skills in `skills/` directory (not `.claude/skills/` which is gitignored)
 
 ### Ask First
 ...

@@ -1,13 +1,43 @@
 """agr list command implementation."""
 
+from pathlib import Path
+
 from rich.console import Console
 from rich.table import Table
 
 from agr.config import AgrConfig, find_config, find_repo_root
 from agr.fetcher import is_skill_installed
-from agr.handle import parse_handle
+from agr.handle import ParsedHandle, parse_handle
+from agr.tool import ToolConfig
 
 console = Console()
+
+
+def _get_installation_status(
+    handle: ParsedHandle,
+    repo_root: Path,
+    tools: list[ToolConfig],
+) -> str:
+    """Get installation status across all configured tools.
+
+    Args:
+        handle: Parsed handle for the skill
+        repo_root: Repository root path
+        tools: List of ToolConfig instances
+
+    Returns:
+        Formatted status string
+    """
+    installed_tools = [
+        tool.name for tool in tools if is_skill_installed(handle, repo_root, tool)
+    ]
+
+    if len(installed_tools) == len(tools):
+        return "[green]installed[/green]"
+    elif installed_tools:
+        return f"[yellow]partial ({', '.join(installed_tools)})[/yellow]"
+    else:
+        return "[yellow]not synced[/yellow]"
 
 
 def run_list() -> None:
@@ -29,6 +59,7 @@ def run_list() -> None:
         return
 
     config = AgrConfig.load(config_path)
+    tools = config.get_tools()
 
     if not config.dependencies:
         console.print("[yellow]No dependencies in agr.toml.[/yellow]")
@@ -55,13 +86,7 @@ def run_list() -> None:
         # Check installation status
         try:
             handle = parse_handle(identifier)
-            installed_name = handle.to_installed_name()
-            is_installed = is_skill_installed(installed_name, repo_root)
-            status = (
-                "[green]installed[/green]"
-                if is_installed
-                else "[yellow]not synced[/yellow]"
-            )
+            status = _get_installation_status(handle, repo_root, tools)
         except Exception:
             status = "[red]invalid[/red]"
 

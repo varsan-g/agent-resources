@@ -4,12 +4,16 @@ import pytest
 
 from agr.exceptions import AgrError, SkillNotFoundError
 from agr.fetcher import (
+    _cleanup_empty_parents,
+    fetch_and_install_to_tools,
     get_installed_skills,
     install_local_skill,
     is_skill_installed,
     uninstall_skill,
 )
+from agr.handle import ParsedHandle
 from agr.skill import SKILL_MARKER
+from agr.tool import CLAUDE, CURSOR
 
 
 class TestInstallLocalSkill:
@@ -20,7 +24,7 @@ class TestInstallLocalSkill:
         dest_dir = tmp_path / ".claude" / "skills"
         dest_dir.mkdir(parents=True)
 
-        installed_path = install_local_skill(skill_fixture, dest_dir)
+        installed_path = install_local_skill(skill_fixture, dest_dir, CLAUDE)
 
         assert installed_path.exists()
         assert (installed_path / SKILL_MARKER).exists()
@@ -34,7 +38,7 @@ class TestInstallLocalSkill:
         dest_dir.mkdir(parents=True)
 
         with pytest.raises(SkillNotFoundError, match="not a valid skill"):
-            install_local_skill(source_dir, dest_dir)
+            install_local_skill(source_dir, dest_dir, CLAUDE)
 
     def test_install_existing_raises(self, tmp_path, skill_fixture):
         """Installing to existing location raises without overwrite."""
@@ -42,11 +46,11 @@ class TestInstallLocalSkill:
         dest_dir.mkdir(parents=True)
 
         # Install once
-        install_local_skill(skill_fixture, dest_dir)
+        install_local_skill(skill_fixture, dest_dir, CLAUDE)
 
         # Install again should raise
         with pytest.raises(FileExistsError):
-            install_local_skill(skill_fixture, dest_dir)
+            install_local_skill(skill_fixture, dest_dir, CLAUDE)
 
     def test_install_with_overwrite(self, tmp_path, skill_fixture):
         """Overwrite flag allows reinstalling."""
@@ -54,8 +58,10 @@ class TestInstallLocalSkill:
         dest_dir.mkdir(parents=True)
 
         # Install twice with overwrite
-        install_local_skill(skill_fixture, dest_dir)
-        installed_path = install_local_skill(skill_fixture, dest_dir, overwrite=True)
+        install_local_skill(skill_fixture, dest_dir, CLAUDE)
+        installed_path = install_local_skill(
+            skill_fixture, dest_dir, CLAUDE, overwrite=True
+        )
 
         assert installed_path.exists()
 
@@ -72,7 +78,7 @@ class TestInstallLocalSkill:
         dest_dir.mkdir(parents=True)
 
         with pytest.raises(AgrError, match="contains reserved sequence"):
-            install_local_skill(bad_skill, dest_dir)
+            install_local_skill(bad_skill, dest_dir, CLAUDE)
 
 
 class TestUninstallSkill:
@@ -88,11 +94,15 @@ class TestUninstallSkill:
         skills_dir.mkdir(parents=True)
 
         # Install skill
-        installed_path = install_local_skill(skill_fixture, skills_dir)
-        installed_name = installed_path.name
+        installed_path = install_local_skill(skill_fixture, skills_dir, CLAUDE)
+
+        # Create handle for uninstall
+        handle = ParsedHandle(
+            is_local=True, name=skill_fixture.name, local_path=skill_fixture
+        )
 
         # Uninstall
-        removed = uninstall_skill(installed_name, repo_root)
+        removed = uninstall_skill(handle, repo_root, CLAUDE)
 
         assert removed
         assert not installed_path.exists()
@@ -103,7 +113,8 @@ class TestUninstallSkill:
         repo_root.mkdir()
         (repo_root / ".git").mkdir()
 
-        removed = uninstall_skill("nonexistent--skill", repo_root)
+        handle = ParsedHandle(is_local=True, name="nonexistent-skill")
+        removed = uninstall_skill(handle, repo_root, CLAUDE)
         assert not removed
 
 
@@ -116,7 +127,7 @@ class TestGetInstalledSkills:
         repo_root.mkdir()
         (repo_root / ".git").mkdir()
 
-        skills = get_installed_skills(repo_root)
+        skills = get_installed_skills(repo_root, CLAUDE)
         assert skills == []
 
     def test_with_skills(self, tmp_path, skill_fixture):
@@ -127,9 +138,9 @@ class TestGetInstalledSkills:
         skills_dir = repo_root / ".claude" / "skills"
         skills_dir.mkdir(parents=True)
 
-        install_local_skill(skill_fixture, skills_dir)
+        install_local_skill(skill_fixture, skills_dir, CLAUDE)
 
-        skills = get_installed_skills(repo_root)
+        skills = get_installed_skills(repo_root, CLAUDE)
         assert len(skills) == 1
         assert skills[0] == f"local--{skill_fixture.name}"
 
@@ -145,10 +156,13 @@ class TestIsSkillInstalled:
         skills_dir = repo_root / ".claude" / "skills"
         skills_dir.mkdir(parents=True)
 
-        installed_path = install_local_skill(skill_fixture, skills_dir)
-        installed_name = installed_path.name
+        install_local_skill(skill_fixture, skills_dir, CLAUDE)
 
-        assert is_skill_installed(installed_name, repo_root)
+        # Create handle for checking
+        handle = ParsedHandle(
+            is_local=True, name=skill_fixture.name, local_path=skill_fixture
+        )
+        assert is_skill_installed(handle, repo_root, CLAUDE)
 
     def test_not_installed(self, tmp_path):
         """Returns False for non-installed skill."""
@@ -156,7 +170,8 @@ class TestIsSkillInstalled:
         repo_root.mkdir()
         (repo_root / ".git").mkdir()
 
-        assert not is_skill_installed("nonexistent--skill", repo_root)
+        handle = ParsedHandle(is_local=True, name="nonexistent-skill")
+        assert not is_skill_installed(handle, repo_root, CLAUDE)
 
 
 class TestDownloadedRepo:
@@ -186,3 +201,124 @@ class TestDownloadedRepo:
         with pytest.raises(RepoNotFoundError):
             with downloaded_repo("nonexistent-user-12345", "nonexistent-repo-67890"):
                 pass
+
+
+class TestCleanupEmptyParents:
+    """Tests for _cleanup_empty_parents function."""
+
+    def test_stops_at_boundary(self, tmp_path):
+        """Doesn't delete beyond stop_at."""
+        stop_at = tmp_path / "skills"
+        stop_at.mkdir()
+        nested = stop_at / "a" / "b" / "c"
+        nested.mkdir(parents=True)
+
+        # Clean up nested empty dirs
+        _cleanup_empty_parents(nested, stop_at)
+
+        # All empty dirs within stop_at should be removed
+        assert not (stop_at / "a").exists()
+        # But stop_at itself should remain
+        assert stop_at.exists()
+
+    def test_handles_non_empty_dir(self, tmp_path):
+        """Stops at non-empty directories."""
+        stop_at = tmp_path / "skills"
+        stop_at.mkdir()
+        nested = stop_at / "a" / "b"
+        nested.mkdir(parents=True)
+        # Put a file in "a"
+        (stop_at / "a" / "file.txt").write_text("content")
+
+        _cleanup_empty_parents(nested, stop_at)
+
+        # "b" should be removed but "a" should remain (has file)
+        assert not (stop_at / "a" / "b").exists()
+        assert (stop_at / "a").exists()
+        assert (stop_at / "a" / "file.txt").exists()
+
+    def test_handles_symlinks(self, tmp_path):
+        """Resolves symlinks before comparison."""
+        stop_at = tmp_path / "skills"
+        stop_at.mkdir()
+        nested = stop_at / "a" / "b"
+        nested.mkdir(parents=True)
+
+        # Create a symlink to the skills dir
+        symlink = tmp_path / "skills_link"
+        symlink.symlink_to(stop_at)
+
+        # Use symlink path
+        nested_via_link = symlink / "a" / "b"
+
+        _cleanup_empty_parents(nested_via_link, symlink)
+
+        # Should still clean up properly
+        assert not (stop_at / "a").exists()
+        assert stop_at.exists()
+
+
+class TestFetchAndInstallToTools:
+    """Tests for fetch_and_install_to_tools function."""
+
+    def test_local_skill_to_multiple_tools(self, tmp_path, skill_fixture):
+        """Local skill installs to multiple tools."""
+        repo_root = tmp_path / "repo"
+        repo_root.mkdir()
+        (repo_root / ".git").mkdir()
+
+        handle = ParsedHandle(
+            is_local=True, name=skill_fixture.name, local_path=skill_fixture
+        )
+
+        results = fetch_and_install_to_tools(
+            handle, repo_root, [CLAUDE, CURSOR], overwrite=False
+        )
+
+        assert "claude" in results
+        assert "cursor" in results
+        assert results["claude"].exists()
+        assert results["cursor"].exists()
+        # Claude uses flat naming
+        assert "--" in results["claude"].name
+        # Cursor uses nested directories
+        assert results["cursor"].parent.name == "local"
+
+    def test_rollback_on_partial_failure(self, tmp_path, skill_fixture):
+        """If second tool fails, first tool installation is rolled back."""
+        repo_root = tmp_path / "repo"
+        repo_root.mkdir()
+        (repo_root / ".git").mkdir()
+
+        # Pre-install to cursor so it will fail without overwrite
+        cursor_skills = repo_root / ".cursor" / "skills" / "local"
+        cursor_skills.mkdir(parents=True)
+        (cursor_skills / skill_fixture.name).mkdir()
+        (cursor_skills / skill_fixture.name / "SKILL.md").write_text("# existing")
+
+        handle = ParsedHandle(
+            is_local=True, name=skill_fixture.name, local_path=skill_fixture
+        )
+
+        # This should fail on cursor (file exists) and rollback claude
+        with pytest.raises(FileExistsError):
+            fetch_and_install_to_tools(
+                handle, repo_root, [CLAUDE, CURSOR], overwrite=False
+            )
+
+        # Claude installation should be rolled back
+        claude_path = repo_root / ".claude" / "skills" / f"local--{skill_fixture.name}"
+        assert not claude_path.exists()
+
+    def test_empty_tools_list_raises(self, tmp_path, skill_fixture):
+        """Empty tools list raises ValueError."""
+        repo_root = tmp_path / "repo"
+        repo_root.mkdir()
+        (repo_root / ".git").mkdir()
+
+        handle = ParsedHandle(
+            is_local=True, name=skill_fixture.name, local_path=skill_fixture
+        )
+
+        with pytest.raises(ValueError, match="No tools provided"):
+            fetch_and_install_to_tools(handle, repo_root, [], overwrite=False)

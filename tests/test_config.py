@@ -9,7 +9,8 @@ from agr.config import (
     find_repo_root,
     get_or_create_config,
 )
-from agr.exceptions import ConfigError
+from agr.exceptions import AgrError, ConfigError
+from agr.tool import ToolConfig
 
 
 class TestDependency:
@@ -219,3 +220,57 @@ dependencies = [
         path, config = get_or_create_config()
         assert path == config_path
         assert len(config.dependencies) == 1
+
+
+class TestGetTools:
+    """Tests for AgrConfig.get_tools method."""
+
+    def test_returns_tool_configs(self):
+        """get_tools returns ToolConfig instances."""
+        config = AgrConfig()
+        tools = config.get_tools()
+        assert len(tools) == 1
+        assert all(isinstance(t, ToolConfig) for t in tools)
+        assert tools[0].name == "claude"
+
+    def test_multiple_tools(self):
+        """get_tools works with multiple configured tools."""
+        config = AgrConfig()
+        config.tools = ["claude", "cursor"]
+        tools = config.get_tools()
+        assert len(tools) == 2
+        assert tools[0].name == "claude"
+        assert tools[1].name == "cursor"
+
+    def test_invalid_tool_raises(self):
+        """get_tools raises AgrError for invalid tool name."""
+        config = AgrConfig()
+        config.tools = ["invalid_tool"]
+        with pytest.raises(AgrError, match="Unknown tool"):
+            config.get_tools()
+
+    def test_load_validates_tool_names(self, tmp_path):
+        """Invalid tool name in config raises ConfigError."""
+        config_path = tmp_path / "agr.toml"
+        config_path.write_text('tools = ["invalid_tool"]\ndependencies = []')
+        with pytest.raises(ConfigError, match="Unknown tool"):
+            AgrConfig.load(config_path)
+
+    def test_save_and_load_tools_roundtrip(self, tmp_path):
+        """Tools array persists through save/load."""
+        config = AgrConfig()
+        config.tools = ["claude", "cursor"]
+        config_path = tmp_path / "agr.toml"
+        config.save(config_path)
+
+        loaded = AgrConfig.load(config_path)
+        assert loaded.tools == ["claude", "cursor"]
+
+    def test_default_tools_not_written_to_file(self, tmp_path):
+        """Default tools array not written to file."""
+        config = AgrConfig()
+        config_path = tmp_path / "agr.toml"
+        config.save(config_path)
+
+        content = config_path.read_text()
+        assert "tools" not in content

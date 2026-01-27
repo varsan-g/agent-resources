@@ -29,17 +29,22 @@ def run_remove(refs: list[str]) -> None:
 
     config = AgrConfig.load(config_path)
 
+    # Get configured tools
+    tools = config.get_tools()
+
     # Track results
     results: list[tuple[str, bool, str]] = []
 
     for ref in refs:
         try:
-            # Parse handle to get installed name
+            # Parse handle
             handle = parse_handle(ref)
-            installed_name = handle.to_installed_name()
 
-            # Remove from filesystem
-            removed_fs = uninstall_skill(installed_name, repo_root)
+            # Remove from filesystem for all configured tools
+            removed_fs = False
+            for tool in tools:
+                if uninstall_skill(handle, repo_root, tool):
+                    removed_fs = True
 
             # Remove from config
             # Try both handle format and path format
@@ -68,8 +73,11 @@ def run_remove(refs: list[str]) -> None:
     for ref, success, message in results:
         if success:
             console.print(f"[green]Removed:[/green] {ref}")
-        else:
+        elif message == "Not found":
             console.print(f"[yellow]Not found:[/yellow] {ref}")
+        else:
+            console.print(f"[red]Error:[/red] {ref}")
+            console.print(f"  [dim]{message}[/dim]")
 
     # Summary
     if len(refs) > 1:

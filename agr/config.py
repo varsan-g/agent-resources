@@ -8,6 +8,7 @@ from tomlkit import TOMLDocument
 from tomlkit.exceptions import TOMLKitError
 
 from agr.exceptions import ConfigError
+from agr.tool import DEFAULT_TOOL_NAMES, TOOLS, ToolConfig, get_tool
 
 
 @dataclass
@@ -51,6 +52,7 @@ class AgrConfig:
     """Configuration loaded from agr.toml.
 
     Format:
+        tools = ["claude", "cursor"]  # Optional, defaults to ["claude"]
         dependencies = [
             { handle = "kasperjunge/commit", type = "skill" },
             { path = "./my-skill", type = "skill" },
@@ -58,7 +60,19 @@ class AgrConfig:
     """
 
     dependencies: list[Dependency] = field(default_factory=list)
+    tools: list[str] = field(default_factory=lambda: list(DEFAULT_TOOL_NAMES))
     _path: Path | None = field(default=None, repr=False)
+
+    def get_tools(self) -> list[ToolConfig]:
+        """Get ToolConfig instances for configured tools.
+
+        Returns:
+            List of ToolConfig instances
+
+        Raises:
+            AgrError: If any tool name is not recognized
+        """
+        return [get_tool(t) for t in self.tools]
 
     @classmethod
     def load(cls, path: Path) -> "AgrConfig":
@@ -86,6 +100,21 @@ class AgrConfig:
 
         config = cls()
         config._path = path
+
+        # Parse tools list (defaults to DEFAULT_TOOL_NAMES)
+        tools_list = doc.get("tools", list(DEFAULT_TOOL_NAMES))
+        if isinstance(tools_list, list):
+            config.tools = [str(t) for t in tools_list]
+        else:
+            config.tools = list(DEFAULT_TOOL_NAMES)
+
+        # Validate tool names
+        for tool_name in config.tools:
+            if tool_name not in TOOLS:
+                available = ", ".join(TOOLS.keys())
+                raise ConfigError(
+                    f"Unknown tool '{tool_name}' in agr.toml. Available: {available}"
+                )
 
         # Parse dependencies list
         deps_list = doc.get("dependencies", [])
@@ -117,6 +146,13 @@ class AgrConfig:
             raise ValueError("No path specified for saving config")
 
         doc: TOMLDocument = tomlkit.document()
+
+        # Save tools array if not default
+        if self.tools != DEFAULT_TOOL_NAMES:
+            tools_array = tomlkit.array()
+            for tool in self.tools:
+                tools_array.append(tool)
+            doc["tools"] = tools_array
 
         # Build dependencies array
         deps_array = tomlkit.array()
