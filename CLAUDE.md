@@ -3,7 +3,24 @@
 A package manager for AI agents. 
 
 ## Commands
-...
+
+This project uses `uv` for Python environment management. **Always use `uv run` to execute Python commands** to ensure they run in the correct virtual environment.
+
+```bash
+# Run tests
+uv run pytest
+
+# Run linters/formatters
+uv run ruff check .
+uv run ruff format .
+
+# Run type checker
+uv run ty check
+
+# Test the CLI tools
+uv run agr --help
+uv run agrx --help
+```
 
 ## Architecture
 ...
