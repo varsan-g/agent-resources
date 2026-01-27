@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+### Fixed
+- Config now saved after sync completes in `agr tools add`, preventing data inconsistency if sync fails
+- Tool not removed from config if skill deletion fails in `agr tools remove`, preventing orphaned files
+- Use `DEFAULT_TOOL_NAMES[0]` constant instead of hardcoded "claude" in agrx fallback
+- Add type annotation to `_check_tool_cli()` in agrx
+- Remove dead code (unused variable assignment) in agrx
+
 ## [0.7.1b1] - 2026-01-27
 
 ### Added

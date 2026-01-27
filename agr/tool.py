@@ -21,6 +21,12 @@ class ToolConfig:
     global_config_dir: str | None = (
         None  # For tools where personal path differs (e.g., Copilot)
     )
+    # CLI fields for running skills with the tool
+    cli_command: str | None = None  # CLI executable name
+    cli_prompt_flag: str = "-p"  # Flag to pass prompt
+    cli_force_flag: str | None = None  # Flag to skip permission prompts
+    cli_continue_flag: str = "--continue"  # Flag to continue session
+    install_hint: str | None = None  # Help text for installation
 
     def get_skills_dir(self, repo_root: Path) -> Path:
         """Get the skills directory for this tool in a repo."""
@@ -38,6 +44,11 @@ CLAUDE = ToolConfig(
     config_dir=".claude",
     skills_subdir="skills",
     supports_nested=False,
+    cli_command="claude",
+    cli_prompt_flag="-p",
+    cli_force_flag="--dangerously-skip-permissions",
+    cli_continue_flag="--continue",
+    install_hint="Install from: https://claude.ai/download",
 )
 
 # Cursor tool configuration (nested dirs: maragudk/skills/bluesky/)
@@ -46,6 +57,11 @@ CURSOR = ToolConfig(
     config_dir=".cursor",
     skills_subdir="skills",
     supports_nested=True,
+    cli_command="agent",
+    cli_prompt_flag="-p",
+    cli_force_flag="--force",
+    cli_continue_flag="--continue",
+    install_hint="Install Cursor IDE to get the agent CLI",
 )
 
 # GitHub Copilot tool configuration
@@ -58,6 +74,11 @@ COPILOT = ToolConfig(
     skills_subdir="skills",
     supports_nested=False,  # Flat naming like Claude
     global_config_dir=".copilot",  # Personal path differs from project path
+    cli_command="copilot",
+    cli_prompt_flag="-p",
+    cli_force_flag="--allow-all-tools",
+    cli_continue_flag="--continue",
+    install_hint="Install GitHub Copilot CLI",
 )
 
 # Registry of all supported tools

@@ -10,6 +10,7 @@ from agr.commands.init import run_init
 from agr.commands.list import run_list
 from agr.commands.remove import run_remove
 from agr.commands.sync import run_sync
+from agr.commands.tools import run_tools_add, run_tools_list, run_tools_remove
 
 app = typer.Typer(
     name="agr",
@@ -17,6 +18,14 @@ app = typer.Typer(
     no_args_is_help=True,
     add_completion=False,
 )
+
+# Tools sub-app
+tools_app = typer.Typer(
+    name="tools",
+    help="Manage configured tools.",
+    no_args_is_help=False,  # Default to list
+)
+app.add_typer(tools_app, name="tools")
 
 
 def version_callback(value: bool) -> None:
@@ -41,6 +50,42 @@ def main(
 ) -> None:
     """Agent Resources - Install and manage Claude Code skills."""
     pass
+
+
+# Tools subcommand group
+@tools_app.callback(invoke_without_command=True)
+def tools_default(ctx: typer.Context) -> None:
+    """List configured tools (default behavior)."""
+    if ctx.invoked_subcommand is None:
+        run_tools_list()
+
+
+@tools_app.command("list")
+def tools_list() -> None:
+    """List configured tools."""
+    run_tools_list()
+
+
+@tools_app.command("add")
+def tools_add(
+    names: Annotated[
+        list[str],
+        typer.Argument(help="Tool names to add."),
+    ],
+) -> None:
+    """Add tools and sync existing dependencies to them."""
+    run_tools_add(names)
+
+
+@tools_app.command("remove")
+def tools_remove(
+    names: Annotated[
+        list[str],
+        typer.Argument(help="Tool names to remove."),
+    ],
+) -> None:
+    """Remove tools and delete their installed skills."""
+    run_tools_remove(names)
 
 
 @app.command()
