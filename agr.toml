@@ -13,4 +13,5 @@ dependencies = [
     {path = "./skills/code-review", type = "skill"},
     {path = "./skills/make-commit", type = "skill"},
     {path = "./skills/make-release", type = "skill"},
+    {path = "./skills/make-research", type = "skill"},
 ]

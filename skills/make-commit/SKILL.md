@@ -65,6 +65,8 @@ pytest                # Tests
 
 Create or update `CHANGELOG.md` in project root.
 
+**IMPORTANT:** Review ALL staged changes, not just the most recent work. The changelog entry must cover everything being committed. If multiple features, fixes, or changes are being committed together, document all of them.
+
 **Format:**
 
 ```markdown
@@ -111,6 +113,7 @@ EOF
 - Blank line after summary
 - Body: explain what and why, not how
 - Reference issues if applicable
+- **Cover ALL changes:** Review `git diff --staged` to ensure the message describes everything being committed, not just the most recent work. If the user wants only a subset of changes committed, they will specify which ones.
 
 ## Step 4: Verify Success
 
