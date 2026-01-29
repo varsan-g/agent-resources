@@ -27,6 +27,14 @@ class ToolConfig:
     cli_prompt_flag: str | None = "-p"  # Flag to pass prompt (None = positional)
     cli_force_flag: str | None = None  # Flag to skip permission prompts
     cli_continue_flag: str | None = "--continue"  # Flag to continue session
+    cli_exec_command: list[str] | None = None  # Command for non-interactive runs
+    cli_continue_command: list[str] | None = None  # Command to continue session
+    cli_interactive_prompt_positional: bool = (
+        False  # Use positional prompt in interactive
+    )
+    cli_interactive_prompt_flag: str | None = None  # Flag for interactive prompt
+    suppress_stderr_non_interactive: bool = False  # Hide streaming output
+    skill_prompt_prefix: str = "/"  # Prefix for invoking a skill
     install_hint: str | None = None  # Help text for installation
 
     def get_skills_dir(self, repo_root: Path) -> Path:
@@ -49,6 +57,7 @@ CLAUDE = ToolConfig(
     cli_prompt_flag="-p",
     cli_force_flag="--dangerously-skip-permissions",
     cli_continue_flag="--continue",
+    cli_interactive_prompt_positional=True,
     install_hint="Install from: https://claude.ai/download",
 )
 
@@ -62,6 +71,7 @@ CURSOR = ToolConfig(
     cli_prompt_flag="-p",
     cli_force_flag="--force",
     cli_continue_flag="--continue",
+    cli_interactive_prompt_positional=True,
     install_hint="Install Cursor IDE to get the agent CLI",
 )
 
@@ -78,6 +88,10 @@ CODEX = ToolConfig(
     cli_prompt_flag=None,  # Codex accepts prompt as positional arg
     cli_force_flag=None,
     cli_continue_flag=None,
+    cli_exec_command=["codex", "exec"],
+    cli_continue_command=["codex", "resume", "--last"],
+    suppress_stderr_non_interactive=True,
+    skill_prompt_prefix="$",
     install_hint="Install OpenAI Codex CLI (npm i -g @openai/codex)",
 )
 
@@ -95,6 +109,7 @@ COPILOT = ToolConfig(
     cli_prompt_flag="-p",
     cli_force_flag="--allow-all-tools",
     cli_continue_flag="--continue",
+    cli_interactive_prompt_flag="-i",
     install_hint="Install GitHub Copilot CLI",
 )
 

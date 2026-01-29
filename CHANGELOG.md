@@ -5,12 +5,17 @@
 ### Added
 - Sync migration for flat tools now records metadata for accurate matching
 - Codex CLI coverage in tool and agrx test suites
+- ToolConfig fields for tool-specific exec/continue commands, prompt modes, and skill prefixes
+- `agent-feedback` skill for filing undesired agent behavior issues
 
 ### Changed
 - Flat tools install skills using the plain skill name by default, falling back to full handle on collisions
 - Local skill installs now reject duplicate skill names across tools
 - Sync now migrates flat `user--repo--skill` directories to plain names when safe
 - Docs now reference the configured tool instead of Claude-only language
+- agrx skill invocation now respects tool-specific prompt modes, nested skill paths, and non-interactive exec handling
+- Default tools list now includes Codex and refreshes bundled skill dependencies
+- `.gitignore` now ignores `.codex/` and `.github/skills/` instead of all of `.github/`
 
 ## [0.7.1b2] - 2026-01-28
 

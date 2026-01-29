@@ -69,11 +69,23 @@ def _cleanup_skill(skill_path: Path) -> None:
             pass  # Best effort cleanup
 
 
-def _build_skill_command(tool_config: ToolConfig, skill_prompt: str) -> list[str]:
+def _build_skill_command(
+    tool_config: ToolConfig,
+    skill_prompt: str,
+    *,
+    non_interactive: bool,
+) -> list[str]:
     """Build the command to run a skill with the selected tool."""
-    assert tool_config.cli_command is not None
-    cmd = [tool_config.cli_command]
-    if tool_config.cli_prompt_flag:
+    if non_interactive and tool_config.cli_exec_command:
+        cmd = list(tool_config.cli_exec_command)
+    else:
+        assert tool_config.cli_command is not None
+        cmd = [tool_config.cli_command]
+    if not non_interactive and tool_config.cli_interactive_prompt_flag:
+        cmd.extend([tool_config.cli_interactive_prompt_flag, skill_prompt])
+    elif not non_interactive and tool_config.cli_interactive_prompt_positional:
+        cmd.append(skill_prompt)
+    elif tool_config.cli_prompt_flag:
         cmd.extend([tool_config.cli_prompt_flag, skill_prompt])
     else:
         cmd.append(skill_prompt)
@@ -219,30 +231,48 @@ def main(
                 f"[dim]Running skill '{parsed.name}' with {tool_name}...[/dim]"
             )
 
-            # Build the skill prompt from the actual installed name
-            skill_prompt = f"/{temp_skill_path.name}"
+            # Build the skill prompt from the actual installed location
+            if tool_config.supports_nested:
+                relative_skill = temp_skill_path.relative_to(skills_dir)
+                skill_prompt = (
+                    f"{tool_config.skill_prompt_prefix}{relative_skill.as_posix()}"
+                )
+            else:
+                skill_prompt = (
+                    f"{tool_config.skill_prompt_prefix}{temp_skill_path.name}"
+                )
             if prompt:
                 skill_prompt += f" {prompt}"
 
             # Run the appropriate CLI
-            cli_cmd = tool_config.cli_command
-            assert cli_cmd is not None
             if interactive:
-                # Run the skill first, then continue in interactive mode
-                cmd = _build_skill_command(tool_config, skill_prompt)
+                # Run the skill in interactive mode
+                cmd = _build_skill_command(
+                    tool_config,
+                    skill_prompt,
+                    non_interactive=False,
+                )
                 if tool_config.cli_force_flag:
                     cmd.append(tool_config.cli_force_flag)
                 subprocess.run(cmd, check=False)
-
-                if tool_config.cli_continue_flag:
-                    console.print("[dim]Continuing in interactive mode...[/dim]")
-                    subprocess.run(
-                        [cli_cmd, tool_config.cli_continue_flag], check=False
-                    )
             else:
                 # Just run the skill
-                cmd = _build_skill_command(tool_config, skill_prompt)
-                subprocess.run(cmd, check=False)
+                cmd = _build_skill_command(
+                    tool_config,
+                    skill_prompt,
+                    non_interactive=True,
+                )
+                if tool_config.suppress_stderr_non_interactive:
+                    result = subprocess.run(
+                        cmd,
+                        check=False,
+                        stderr=subprocess.PIPE,
+                        text=True,
+                    )
+                    if result.returncode != 0 and result.stderr:
+                        sys.stderr.write(result.stderr)
+                else:
+                    subprocess.run(cmd, check=False)
 
         finally:
             # Restore signal handlers

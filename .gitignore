@@ -1,6 +1,8 @@
 .claude/
 .cursor/
-.github/
+.codex/
+.github/skills/
+
 
 # Python
 __pycache__/

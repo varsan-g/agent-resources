@@ -1,4 +1,4 @@
-tools = ["claude", "cursor", "copilot"]
+tools = ["claude", "cursor", "copilot", "codex"]
 dependencies = [
     {handle = "maragudk/skills/bluesky", type = "skill"},
     {handle = "dsjacobsen/golang-pro", type = "skill"},
@@ -6,7 +6,6 @@ dependencies = [
     {handle = "anthropics/skills/skill-creator", type = "skill"},
     {path = "./skills/migrate-to-skills", type = "skill"},
     {handle = "davila7/claude-code-templates/systematic-debugging", type = "skill"},
-    {handle = "obra/superpowers/brainstorming", type = "skill"},
     {handle = "obra/superpowers/writing-skills", type = "skill"},
     {path = "./skills/discover-solution-space", type = "skill"},
     {path = "./skills/make-plan", type = "skill"},
@@ -14,4 +13,5 @@ dependencies = [
     {path = "./skills/make-commit", type = "skill"},
     {path = "./skills/make-release", type = "skill"},
     {path = "./skills/make-research", type = "skill"},
+    {handle = "anthropics/skills/canvas-design", type = "skill"},
 ]

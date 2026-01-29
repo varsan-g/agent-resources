@@ -33,6 +33,40 @@ class TestToolConfig:
         assert CODEX.cli_continue_flag is None
         assert COPILOT.cli_continue_flag == "--continue"
 
+    def test_tool_config_has_cli_commands(self):
+        """ToolConfig includes CLI command fields."""
+        assert CLAUDE.cli_exec_command is None
+        assert CURSOR.cli_exec_command is None
+        assert CODEX.cli_exec_command == ["codex", "exec"]
+        assert COPILOT.cli_exec_command is None
+
+        assert CLAUDE.cli_continue_command is None
+        assert CURSOR.cli_continue_command is None
+        assert CODEX.cli_continue_command == ["codex", "resume", "--last"]
+        assert COPILOT.cli_continue_command is None
+
+    def test_tool_config_has_output_handling(self):
+        """ToolConfig includes non-interactive output controls."""
+        assert CLAUDE.suppress_stderr_non_interactive is False
+        assert CURSOR.suppress_stderr_non_interactive is False
+        assert CODEX.suppress_stderr_non_interactive is True
+        assert COPILOT.suppress_stderr_non_interactive is False
+
+    def test_tool_config_has_interactive_prompt_mode(self):
+        """ToolConfig includes interactive prompt mode controls."""
+        assert CLAUDE.cli_interactive_prompt_positional is True
+        assert CURSOR.cli_interactive_prompt_positional is True
+        assert CODEX.cli_interactive_prompt_positional is False
+        assert COPILOT.cli_interactive_prompt_positional is False
+        assert CLAUDE.cli_interactive_prompt_flag is None
+        assert CURSOR.cli_interactive_prompt_flag is None
+        assert CODEX.cli_interactive_prompt_flag is None
+        assert COPILOT.cli_interactive_prompt_flag == "-i"
+        assert CLAUDE.skill_prompt_prefix == "/"
+        assert CURSOR.skill_prompt_prefix == "/"
+        assert CODEX.skill_prompt_prefix == "$"
+        assert COPILOT.skill_prompt_prefix == "/"
+
     def test_tool_config_has_install_hint(self):
         """ToolConfig includes install_hint field."""
         assert CLAUDE.install_hint is not None
@@ -51,6 +85,12 @@ class TestToolConfig:
             if tool_config.cli_continue_flag is not None:
                 assert tool_config.cli_continue_flag, (
                     f"{name} missing cli_continue_flag"
+                )
+            if tool_config.cli_exec_command is not None:
+                assert tool_config.cli_exec_command, f"{name} missing cli_exec_command"
+            if tool_config.cli_continue_command is not None:
+                assert tool_config.cli_continue_command, (
+                    f"{name} missing cli_continue_command"
                 )
             assert tool_config.install_hint is not None, f"{name} missing install_hint"
 
