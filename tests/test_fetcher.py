@@ -1,5 +1,7 @@
 """Tests for agr.fetcher module."""
 
+from pathlib import Path
+
 import pytest
 import respx
 from httpx import Response
@@ -17,10 +19,12 @@ from agr.fetcher import (
     fetch_and_install_to_tools,
     get_installed_skills,
     install_local_skill,
+    install_skill_from_repo,
     is_skill_installed,
     uninstall_skill,
 )
 from agr.handle import ParsedHandle
+from agr.metadata import build_handle_id, read_skill_metadata
 from agr.skill import SKILL_MARKER
 from agr.tool import CLAUDE, CURSOR
 
@@ -385,6 +389,69 @@ class TestUninstallSkill:
         handle = ParsedHandle(is_local=True, name="nonexistent-skill")
         removed = uninstall_skill(handle, repo_root, CLAUDE)
         assert not removed
+
+
+class TestMetadataMatching:
+    """Tests for metadata-based matching on flat tools."""
+
+    def _create_repo_with_skill(self, base_dir: Path, name: str, label: str) -> Path:
+        repo_dir = base_dir / f"repo-{label}-{name}"
+        skill_dir = repo_dir / name
+        skill_dir.mkdir(parents=True)
+        (skill_dir / SKILL_MARKER).write_text("# Test skill")
+        return repo_dir
+
+    def test_metadata_written_and_used_for_matching(self, tmp_path):
+        """Metadata ensures handles match the correct flat install."""
+        repo_root = tmp_path / "project"
+        repo_root.mkdir()
+        skills_dir = repo_root / ".claude" / "skills"
+        skills_dir.mkdir(parents=True)
+
+        repo_dir = self._create_repo_with_skill(tmp_path, "test-skill", "single")
+        handle = ParsedHandle(username="alpha", name="test-skill")
+
+        installed = install_skill_from_repo(
+            repo_dir, "test-skill", handle, skills_dir, CLAUDE, repo_root
+        )
+
+        meta = read_skill_metadata(installed)
+        assert meta is not None
+        assert meta["id"] == build_handle_id(handle, repo_root)
+        assert is_skill_installed(handle, repo_root, CLAUDE)
+
+    def test_flat_collision_uses_full_name_and_metadata(self, tmp_path):
+        """Second handle with same name installs to full handle name."""
+        repo_root = tmp_path / "project"
+        repo_root.mkdir()
+        skills_dir = repo_root / ".claude" / "skills"
+        skills_dir.mkdir(parents=True)
+
+        repo_a = self._create_repo_with_skill(tmp_path, "test-skill", "a")
+        handle_a = ParsedHandle(username="alpha", name="test-skill")
+        install_skill_from_repo(
+            repo_a, "test-skill", handle_a, skills_dir, CLAUDE, repo_root
+        )
+
+        handle_b = ParsedHandle(username="bravo", name="test-skill")
+        assert not is_skill_installed(handle_b, repo_root, CLAUDE)
+
+        repo_b = self._create_repo_with_skill(tmp_path, "test-skill", "b")
+        installed_b = install_skill_from_repo(
+            repo_b, "test-skill", handle_b, skills_dir, CLAUDE, repo_root
+        )
+
+        assert installed_b.name == handle_b.to_installed_name()
+        assert (skills_dir / "test-skill").exists()
+        assert (skills_dir / handle_b.to_installed_name()).exists()
+
+        meta_b = read_skill_metadata(installed_b)
+        assert meta_b is not None
+        assert meta_b["id"] == build_handle_id(handle_b, repo_root)
+
+        assert uninstall_skill(handle_b, repo_root, CLAUDE) is True
+        assert not (skills_dir / handle_b.to_installed_name()).exists()
+        assert (skills_dir / "test-skill").exists()
 
 
 class TestGetInstalledSkills:
