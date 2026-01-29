@@ -40,6 +40,45 @@ def _skill_dir_matches_handle(skill_dir: Path, handle_id: str | None) -> bool:
     return meta.get("id") == handle_id
 
 
+def _find_local_name_conflicts(
+    handle: ParsedHandle,
+    skills_dir: Path,
+    tool: ToolConfig,
+    repo_root: Path | None,
+    default_dest: Path,
+) -> tuple[list[Path], bool]:
+    """Find conflicting local installs with the same skill name.
+
+    Returns a tuple of (conflict_paths, has_unknown_metadata).
+    """
+    handle_id = build_handle_id(handle, repo_root)
+    conflicts: list[Path] = []
+    has_unknown = False
+
+    if tool.supports_nested:
+        candidates = [skills_dir / "local" / handle.name]
+    else:
+        candidates = [skills_dir / handle.name, skills_dir / handle.to_installed_name()]
+
+    for path in candidates:
+        if tool.supports_nested and path == default_dest:
+            continue
+        if not is_valid_skill_dir(path):
+            continue
+        meta = read_skill_metadata(path)
+        if meta:
+            if meta.get("type") != "local":
+                continue
+            if meta.get("id") == handle_id:
+                continue
+            conflicts.append(path)
+            continue
+        has_unknown = True
+        conflicts.append(path)
+
+    return conflicts, has_unknown
+
+
 def _find_existing_skill_dir(
     handle: ParsedHandle,
     skills_dir: Path,
@@ -327,6 +366,22 @@ def install_local_skill(
     if repo_root is None:
         # dest_dir is typically <repo>/.tool/skills
         repo_root = dest_dir.parent.parent
+
+    default_dest = dest_dir / handle.to_skill_path(tool)
+    conflicts, has_unknown = _find_local_name_conflicts(
+        handle, dest_dir, tool, repo_root, default_dest
+    )
+    if conflicts:
+        locations = ", ".join(str(path) for path in conflicts)
+        hint = ""
+        if has_unknown:
+            hint = " If this is a remote skill, run `agr sync` or reinstall it to add metadata."
+        raise AgrError(
+            f"Local skill name '{handle.name}' is already installed at {locations}. "
+            "agr allows only one local skill with a given name. "
+            "Rename the skill or remove the existing one."
+            f"{hint}"
+        )
 
     skill_dest = _resolve_skill_destination(handle, dest_dir, tool, repo_root)
 

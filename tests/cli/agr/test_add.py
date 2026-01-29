@@ -53,3 +53,14 @@ class TestAgrAdd:
         result = agr("add", "./skills/test-skill")
 
         assert_cli(result).failed().stdout_contains("--overwrite")
+
+    def test_add_local_skill_duplicate_name_fails(self, agr, cli_project, cli_skill):
+        """agr add rejects a second local skill with the same name."""
+        dup_dir = cli_project / "other" / "test-skill"
+        dup_dir.mkdir(parents=True)
+        (dup_dir / "SKILL.md").write_text("# Duplicate")
+
+        agr("add", "./skills/test-skill")
+        result = agr("add", "./other/test-skill")
+
+        assert_cli(result).failed().stdout_contains("only one local skill")

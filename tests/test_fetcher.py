@@ -330,8 +330,8 @@ class TestInstallLocalSkill:
         with pytest.raises(AgrError, match="contains reserved sequence"):
             install_local_skill(bad_skill, dest_dir, CLAUDE)
 
-    def test_collision_uses_full_name_for_flat_tools(self, tmp_path):
-        """Second skill with same name installs using full flat name."""
+    def test_local_collision_raises(self, tmp_path):
+        """Second local skill with same name raises."""
         from agr.skill import SKILL_MARKER
 
         dest_dir = tmp_path / ".claude" / "skills"
@@ -345,11 +345,9 @@ class TestInstallLocalSkill:
         (skill_a / SKILL_MARKER).write_text("# Skill A")
         (skill_b / SKILL_MARKER).write_text("# Skill B")
 
-        first_install = install_local_skill(skill_a, dest_dir, CLAUDE)
-        second_install = install_local_skill(skill_b, dest_dir, CLAUDE)
-
-        assert first_install == dest_dir / "test-skill"
-        assert second_install == dest_dir / "local--test-skill"
+        install_local_skill(skill_a, dest_dir, CLAUDE)
+        with pytest.raises(AgrError, match="only one local skill"):
+            install_local_skill(skill_b, dest_dir, CLAUDE)
 
 
 class TestUninstallSkill:

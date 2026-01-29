@@ -8,6 +8,7 @@
 
 ### Changed
 - Flat tools install skills using the plain skill name by default, falling back to full handle on collisions
+- Local skill installs now reject duplicate skill names across tools
 - Sync now migrates flat `user--repo--skill` directories to plain names when safe
 - Docs now reference the configured tool instead of Claude-only language
 
