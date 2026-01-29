@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.7.1] - 2026-01-29
+
 ### Added
 - Sync migration for flat tools now records metadata for accurate matching
 - Codex CLI coverage in tool and agrx test suites
