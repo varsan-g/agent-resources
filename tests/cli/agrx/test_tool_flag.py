@@ -42,6 +42,15 @@ class TestAgrxToolFlag:
 
         assert_cli(result).failed().stdout_contains("copilot CLI not found")
 
+    @pytest.mark.skipif(
+        shutil.which("codex") is not None, reason="codex CLI is installed"
+    )
+    def test_agrx_tool_cli_not_found_codex(self, agrx):
+        """agrx --tool codex fails when codex CLI not found."""
+        result = agrx("user/skill", "--tool", "codex")
+
+        assert_cli(result).failed().stdout_contains("codex CLI not found")
+
 
 class TestAgrxToolFromConfig:
     """Tests for agrx using tool from agr.toml."""

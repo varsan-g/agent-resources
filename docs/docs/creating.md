@@ -107,7 +107,7 @@ Add your local skill and test it:
 agr add ./my-skill
 ```
 
-Your skill is now available in Claude Code. Test it by starting Claude and invoking the skill.
+Your skill is now available in your configured tool. Test it by starting your agent and invoking the skill.
 
 ## Share with Others
 

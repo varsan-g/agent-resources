@@ -4,10 +4,12 @@
 
 ### Added
 - Sync migration for flat tools now records metadata for accurate matching
+- Codex CLI coverage in tool and agrx test suites
 
 ### Changed
 - Flat tools install skills using the plain skill name by default, falling back to full handle on collisions
 - Sync now migrates flat `user--repo--skill` directories to plain names when safe
+- Docs now reference the configured tool instead of Claude-only language
 
 ## [0.7.1b2] - 2026-01-28
 

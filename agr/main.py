@@ -14,7 +14,7 @@ from agr.commands.tools import run_tools_add, run_tools_list, run_tools_remove
 
 app = typer.Typer(
     name="agr",
-    help="Agent Resources - Install and manage Claude Code skills.",
+    help="Agent Resources - Install and manage agent skills.",
     no_args_is_help=True,
     add_completion=False,
 )
@@ -48,7 +48,7 @@ def main(
         ),
     ] = None,
 ) -> None:
-    """Agent Resources - Install and manage Claude Code skills."""
+    """Agent Resources - Install and manage agent skills."""
     pass
 
 

@@ -39,8 +39,10 @@ class TestAgrToolsList:
         result = agr("tools")
 
         assert_cli(result).succeeded().stdout_contains("Available tools:")
-        # cursor and copilot should be available
+        # cursor, codex, and copilot should be available
         assert_cli(result).stdout_contains("cursor")
+        assert_cli(result).stdout_contains("codex")
+        assert_cli(result).stdout_contains("copilot")
 
 
 class TestAgrToolsAdd:
@@ -63,10 +65,11 @@ class TestAgrToolsAdd:
         """agr tools add adds multiple tools."""
         cli_config('tools = ["claude"]\ndependencies = []')
 
-        result = agr("tools", "add", "cursor", "copilot")
+        result = agr("tools", "add", "cursor", "codex", "copilot")
 
         assert_cli(result).succeeded()
         assert "cursor" in result.stdout
+        assert "codex" in result.stdout
         assert "copilot" in result.stdout
 
     def test_tools_add_already_configured(self, agr, cli_config):

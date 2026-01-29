@@ -91,13 +91,13 @@ Run a skill temporarily without adding to `agr.toml`.
 agrx <handle> [options]
 ```
 
-Downloads the skill, runs it with Claude, and cleans up afterwards.
+Downloads the skill, runs it with the selected tool, and cleans up afterwards.
 
 **Options:**
 
 - `--interactive`, `-i` — Run skill, then continue in interactive mode
 - `--prompt`, `-p` — Prompt to pass to the skill
-- `--global`, `-g` — Install to `~/.claude/skills/` instead of `./.claude/skills/`
+- `--global`, `-g` — Install to the global tool skills directory (e.g. `~/.claude/skills/`, `~/.codex/skills/`) instead of the repo-local one
 
 **Examples:**
 

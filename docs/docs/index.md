@@ -26,7 +26,7 @@ pip install agr
 agr add anthropics/skills/frontend-design
 ```
 
-Done. The skill is available in Claude Code.
+Done. The skill is available in your configured tool (Claude Code, Codex, Cursor, or Copilot).
 
 ## Run a Skill Directly
 
