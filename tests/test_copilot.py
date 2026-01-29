@@ -71,17 +71,17 @@ class TestCopilotPaths:
     def test_remote_skill_flat_path(self):
         """Remote skill gets flat path for Copilot."""
         h = ParsedHandle(username="maragudk", repo="skills", name="bluesky")
-        assert h.to_skill_path(COPILOT) == Path("maragudk--skills--bluesky")
+        assert h.to_skill_path(COPILOT) == Path("bluesky")
 
     def test_remote_skill_no_repo_flat(self):
         """Remote skill without repo gets flat path for Copilot."""
         h = ParsedHandle(username="kasperjunge", name="commit")
-        assert h.to_skill_path(COPILOT) == Path("kasperjunge--commit")
+        assert h.to_skill_path(COPILOT) == Path("commit")
 
     def test_local_skill_flat_path(self):
         """Local skill gets flat path for Copilot."""
         h = ParsedHandle(is_local=True, name="my-skill")
-        assert h.to_skill_path(COPILOT) == Path("local--my-skill")
+        assert h.to_skill_path(COPILOT) == Path("my-skill")
 
     def test_copilot_paths_match_claude(self):
         """Copilot uses same path format as Claude (both flat)."""
@@ -96,7 +96,7 @@ class TestCopilotPaths:
     def test_copilot_paths_differ_from_cursor(self):
         """Copilot uses flat paths, Cursor uses nested."""
         h = ParsedHandle(username="maragudk", repo="skills", name="bluesky")
-        assert h.to_skill_path(COPILOT) == Path("maragudk--skills--bluesky")
+        assert h.to_skill_path(COPILOT) == Path("bluesky")
         assert h.to_skill_path(CURSOR) == Path("maragudk/skills/bluesky")
 
 
@@ -104,14 +104,14 @@ class TestCopilotSkillName:
     """Tests for SKILL.md name field for Copilot."""
 
     def test_skill_name_flat(self):
-        """Copilot gets full flat name like Claude."""
+        """Copilot defaults to the skill name like Claude."""
         h = ParsedHandle(username="maragudk", repo="skills", name="bluesky")
-        assert h.get_skill_name_for_tool(COPILOT) == "maragudk--skills--bluesky"
+        assert h.get_skill_name_for_tool(COPILOT) == "bluesky"
 
     def test_local_skill_name_flat(self):
-        """Local skills get prefixed name for Copilot."""
+        """Local skills default to the skill name for Copilot."""
         h = ParsedHandle(is_local=True, name="my-skill")
-        assert h.get_skill_name_for_tool(COPILOT) == "local--my-skill"
+        assert h.get_skill_name_for_tool(COPILOT) == "my-skill"
 
     def test_skill_name_matches_claude(self):
         """Copilot uses same skill name format as Claude."""
@@ -135,8 +135,8 @@ class TestCopilotInstallation:
 
         installed_path = install_local_skill(skill_fixture, dest_dir, COPILOT)
 
-        # Should be flat: local--test-skill/
-        assert installed_path == dest_dir / f"local--{skill_fixture.name}"
+        # Should be flat: test-skill/
+        assert installed_path == dest_dir / skill_fixture.name
         assert installed_path.exists()
         assert (installed_path / SKILL_MARKER).exists()
 
@@ -149,7 +149,7 @@ class TestCopilotInstallation:
 
         # Verify flat structure (no "local" parent directory)
         assert not (dest_dir / "local").exists()
-        assert (dest_dir / f"local--{skill_fixture.name}").is_dir()
+        assert (dest_dir / skill_fixture.name).is_dir()
 
 
 class TestCopilotVsClaude:
@@ -169,7 +169,7 @@ class TestCopilotVsClaude:
 
         # Both should have same directory name (just different parent)
         assert claude_path.name == copilot_path.name
-        assert claude_path.name == f"local--{skill_fixture.name}"
+        assert claude_path.name == skill_fixture.name
 
 
 class TestCopilotIsSkillInstalled:

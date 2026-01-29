@@ -7,8 +7,14 @@ from rich.console import Console
 from agr.config import AgrConfig, find_config, find_repo_root
 from agr.exceptions import AgrError
 from agr.fetcher import fetch_and_install_to_tools, is_skill_installed
-from agr.handle import INSTALLED_NAME_SEPARATOR, LEGACY_SEPARATOR, parse_handle
-from agr.skill import SKILL_MARKER
+from agr.handle import (
+    INSTALLED_NAME_SEPARATOR,
+    LEGACY_SEPARATOR,
+    ParsedHandle,
+    parse_handle,
+)
+from agr.metadata import build_handle_id, read_skill_metadata, write_skill_metadata
+from agr.skill import SKILL_MARKER, is_valid_skill_dir, update_skill_md_name
 from agr.tool import ToolConfig
 
 console = Console()
@@ -59,6 +65,107 @@ def _migrate_legacy_directories(skills_dir: Path, tool: ToolConfig) -> None:
             console.print(f"  [dim]{e}[/dim]")
 
 
+def _migrate_flat_installed_names(
+    skills_dir: Path,
+    tool: ToolConfig,
+    config: AgrConfig,
+    repo_root: Path,
+) -> None:
+    """Migrate flat skill names to the plain <skill> format when safe.
+
+    Only applies to flat tools. Uses agr.toml dependencies to resolve
+    handle identities and writes metadata for accurate future matching.
+    """
+    # TODO(decide): consider best-effort migration for installs not in agr.toml.
+    # This is ambiguous for local skills because the original path is unknown,
+    # and for remotes because multiple handles can share the same skill name.
+    if tool.supports_nested:
+        return
+
+    if not skills_dir.exists():
+        return
+
+    # Build handles from config dependencies
+    handles_by_name: dict[str, list[ParsedHandle]] = {}
+    for dep in config.dependencies:
+        ref = dep.path or dep.handle or ""
+        if not ref:
+            continue
+        try:
+            if dep.is_local:
+                path = Path(ref)
+                handle = ParsedHandle(is_local=True, name=path.name, local_path=path)
+            else:
+                handle = parse_handle(ref)
+        except Exception:
+            continue
+        handles_by_name.setdefault(handle.name, []).append(handle)
+
+    for skill_name, handles in handles_by_name.items():
+        name_dir = skills_dir / skill_name
+        name_dir_is_skill = is_valid_skill_dir(name_dir)
+
+        # If a name dir exists, try to match metadata to a handle
+        matched_handle: ParsedHandle | None = None
+        if name_dir_is_skill:
+            meta = read_skill_metadata(name_dir)
+            if meta:
+                for handle in handles:
+                    if meta.get("id") == build_handle_id(handle, repo_root):
+                        matched_handle = handle
+                        break
+
+        # If there is only one handle for this name, ensure name dir metadata
+        if len(handles) == 1:
+            handle = handles[0]
+            handle_id = build_handle_id(handle, repo_root)
+            if name_dir_is_skill:
+                meta = read_skill_metadata(name_dir)
+                if not meta or meta.get("id") != handle_id:
+                    update_skill_md_name(name_dir, name_dir.name)
+                    write_skill_metadata(
+                        name_dir, handle, repo_root, tool.name, name_dir.name
+                    )
+                continue
+
+            # No name dir: try to migrate from full flat name
+            full_dir = skills_dir / handle.to_installed_name()
+            if is_valid_skill_dir(full_dir):
+                if not name_dir.exists():
+                    try:
+                        full_dir.rename(name_dir)
+                        update_skill_md_name(name_dir, name_dir.name)
+                        write_skill_metadata(
+                            name_dir, handle, repo_root, tool.name, name_dir.name
+                        )
+                        console.print(
+                            f"[blue]Migrated:[/blue] {full_dir.name} -> {name_dir.name}"
+                        )
+                    except OSError as e:
+                        console.print(f"[red]Failed to migrate:[/red] {full_dir.name}")
+                        console.print(f"  [dim]{e}[/dim]")
+                else:
+                    # Name exists but isn't a skill dir; skip rename
+                    pass
+            continue
+
+        # Multiple handles with same name: avoid renaming to plain name
+        if matched_handle:
+            update_skill_md_name(name_dir, name_dir.name)
+            write_skill_metadata(
+                name_dir, matched_handle, repo_root, tool.name, name_dir.name
+            )
+
+        # Ensure metadata on full-name dirs for all handles
+        for handle in handles:
+            full_dir = skills_dir / handle.to_installed_name()
+            if is_valid_skill_dir(full_dir):
+                update_skill_md_name(full_dir, full_dir.name)
+                write_skill_metadata(
+                    full_dir, handle, repo_root, tool.name, full_dir.name
+                )
+
+
 def run_sync() -> None:
     """Run the sync command.
 
@@ -87,6 +194,7 @@ def run_sync() -> None:
     for tool in tools:
         skills_dir = tool.get_skills_dir(repo_root)
         _migrate_legacy_directories(skills_dir, tool)
+        _migrate_flat_installed_names(skills_dir, tool, config, repo_root)
 
     if not config.dependencies:
         console.print("[yellow]No dependencies in agr.toml.[/yellow] Nothing to sync.")

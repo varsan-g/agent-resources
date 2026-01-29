@@ -3,6 +3,9 @@
 import re
 from pathlib import Path
 
+import importlib
+from typing import Any
+
 import pytest
 
 DOCS_DIR = Path(__file__).parent.parent / "docs" / "docs"
@@ -110,10 +113,11 @@ class TestCodeExamples:
         content = md_file.read_text()
         blocks = extract_code_blocks(content)
 
+        tomllib: Any
         try:
-            import tomllib
-        except ImportError:
-            import tomli as tomllib
+            tomllib = importlib.import_module("tomllib")
+        except ModuleNotFoundError:
+            tomllib = importlib.import_module("tomli")
 
         for lang, code in blocks:
             if lang == "toml":

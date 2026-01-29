@@ -93,12 +93,7 @@ class TestPrivateRepoRealNetwork:
         result = agr("add", "kasperjunge/agent-resources-private-test-repo/test-skill")
 
         assert_cli(result).succeeded()
-        installed = (
-            cli_project
-            / ".claude"
-            / "skills"
-            / "kasperjunge--agent-resources-private-test-repo--test-skill"
-        )
+        installed = cli_project / ".claude" / "skills" / "test-skill"
         assert installed.exists()
 
     def test_sync_with_private_dependency_succeeds(self, agr, cli_project, cli_config):
@@ -114,12 +109,7 @@ dependencies = [
         result = agr("sync")
 
         assert_cli(result).succeeded()
-        installed = (
-            cli_project
-            / ".claude"
-            / "skills"
-            / "kasperjunge--agent-resources-private-test-repo--test-skill"
-        )
+        installed = cli_project / ".claude" / "skills" / "test-skill"
         assert installed.exists()
 
     def test_add_private_to_multiple_tools(self, agr, cli_project, cli_config):
@@ -130,12 +120,7 @@ dependencies = [
 
         assert_cli(result).succeeded()
         # Claude (flat)
-        claude_installed = (
-            cli_project
-            / ".claude"
-            / "skills"
-            / "kasperjunge--agent-resources-private-test-repo--test-skill"
-        )
+        claude_installed = cli_project / ".claude" / "skills" / "test-skill"
         assert claude_installed.exists()
         # Cursor (nested)
         cursor_installed = (
@@ -165,10 +150,5 @@ class TestPublicRepoNoToken:
         result = agr("add", "kasperjunge/agent-resources-public-test-repo/test-skill")
 
         assert_cli(result).succeeded()
-        installed = (
-            cli_project
-            / ".claude"
-            / "skills"
-            / "kasperjunge--agent-resources-public-test-repo--test-skill"
-        )
+        installed = cli_project / ".claude" / "skills" / "test-skill"
         assert installed.exists()

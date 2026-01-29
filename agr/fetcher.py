@@ -18,6 +18,7 @@ from agr.exceptions import (
     SkillNotFoundError,
 )
 from agr.handle import INSTALLED_NAME_SEPARATOR, ParsedHandle
+from agr.metadata import build_handle_id, read_skill_metadata, write_skill_metadata
 from agr.skill import (
     SKILL_MARKER,
     find_skill_in_repo,
@@ -27,6 +28,68 @@ from agr.skill import (
 from agr.tool import DEFAULT_TOOL, ToolConfig
 
 logger = logging.getLogger(__name__)
+
+
+def _skill_dir_matches_handle(skill_dir: Path, handle_id: str | None) -> bool:
+    """Check whether a skill directory matches a handle via metadata."""
+    if not handle_id:
+        return False
+    meta = read_skill_metadata(skill_dir)
+    if not meta:
+        return False
+    return meta.get("id") == handle_id
+
+
+def _find_existing_skill_dir(
+    handle: ParsedHandle,
+    skills_dir: Path,
+    tool: ToolConfig,
+    repo_root: Path | None,
+) -> Path | None:
+    """Find an existing installed skill directory for this handle."""
+    if tool.supports_nested:
+        skill_path = skills_dir / handle.to_skill_path(tool)
+        return skill_path if is_valid_skill_dir(skill_path) else None
+
+    handle_id = build_handle_id(handle, repo_root)
+    name_path = skills_dir / handle.name
+    full_path = skills_dir / handle.to_installed_name()
+
+    if is_valid_skill_dir(name_path) and _skill_dir_matches_handle(
+        name_path, handle_id
+    ):
+        return name_path
+    if is_valid_skill_dir(full_path) and _skill_dir_matches_handle(
+        full_path, handle_id
+    ):
+        return full_path
+
+    # Legacy fallback: flat installs used full path names
+    if is_valid_skill_dir(full_path):
+        return full_path
+
+    return None
+
+
+def _resolve_skill_destination(
+    handle: ParsedHandle,
+    skills_dir: Path,
+    tool: ToolConfig,
+    repo_root: Path | None,
+) -> Path:
+    """Resolve the destination path for installing a skill."""
+    if tool.supports_nested:
+        return skills_dir / handle.to_skill_path(tool)
+
+    existing = _find_existing_skill_dir(handle, skills_dir, tool, repo_root)
+    if existing:
+        return existing
+
+    name_path = skills_dir / handle.name
+    if is_valid_skill_dir(name_path):
+        return skills_dir / handle.to_installed_name()
+
+    return name_path
 
 
 def _get_github_token() -> str | None:
@@ -141,6 +204,7 @@ def _copy_skill_to_destination(
     handle: ParsedHandle,
     tool: ToolConfig,
     overwrite: bool,
+    repo_root: Path | None,
 ) -> Path:
     """Copy skill source to destination with overwrite handling.
 
@@ -150,6 +214,7 @@ def _copy_skill_to_destination(
         handle: Parsed handle for naming
         tool: Tool configuration
         overwrite: Whether to overwrite existing
+        repo_root: Repository root for metadata resolution (optional)
 
     Returns:
         Path to installed skill
@@ -168,8 +233,8 @@ def _copy_skill_to_destination(
     dest.parent.mkdir(parents=True, exist_ok=True)
     shutil.copytree(source, dest)
 
-    skill_name_for_tool = handle.get_skill_name_for_tool(tool)
-    update_skill_md_name(dest, skill_name_for_tool)
+    update_skill_md_name(dest, dest.name)
+    write_skill_metadata(dest, handle, repo_root, tool.name, dest.name)
 
     return dest
 
@@ -180,6 +245,7 @@ def install_skill_from_repo(
     handle: ParsedHandle,
     dest_dir: Path,
     tool: ToolConfig,
+    repo_root: Path | None,
     overwrite: bool = False,
 ) -> Path:
     """Install a skill from a downloaded repository.
@@ -190,6 +256,7 @@ def install_skill_from_repo(
         handle: Parsed handle for naming
         dest_dir: Destination skills directory
         tool: Tool configuration for path structure
+        repo_root: Repository root for metadata resolution (optional)
         overwrite: Whether to overwrite existing
 
     Returns:
@@ -208,11 +275,11 @@ def install_skill_from_repo(
             f"Hint: Create a skill at 'skills/{skill_name}/SKILL.md' or '{skill_name}/SKILL.md'"
         )
 
-    # Determine installed path based on tool
-    skill_path = handle.to_skill_path(tool)
-    skill_dest = dest_dir / skill_path
+    skill_dest = _resolve_skill_destination(handle, dest_dir, tool, repo_root)
 
-    return _copy_skill_to_destination(skill_source, skill_dest, handle, tool, overwrite)
+    return _copy_skill_to_destination(
+        skill_source, skill_dest, handle, tool, overwrite, repo_root
+    )
 
 
 def install_local_skill(
@@ -220,6 +287,8 @@ def install_local_skill(
     dest_dir: Path,
     tool: ToolConfig,
     overwrite: bool = False,
+    repo_root: Path | None = None,
+    handle: ParsedHandle | None = None,
 ) -> Path:
     """Install a local skill.
 
@@ -228,6 +297,8 @@ def install_local_skill(
         dest_dir: Destination skills directory
         tool: Tool configuration for path structure
         overwrite: Whether to overwrite existing
+        repo_root: Repository root for metadata resolution (optional)
+        handle: Optional pre-parsed handle for metadata and naming
 
     Returns:
         Path to installed skill
@@ -250,11 +321,18 @@ def install_local_skill(
         )
 
     # Determine installed path using ParsedHandle for consistency
-    handle = ParsedHandle(is_local=True, name=source_path.name, local_path=source_path)
-    skill_path = handle.to_skill_path(tool)
-    skill_dest = dest_dir / skill_path
+    handle = handle or ParsedHandle(
+        is_local=True, name=source_path.name, local_path=source_path
+    )
+    if repo_root is None:
+        # dest_dir is typically <repo>/.tool/skills
+        repo_root = dest_dir.parent.parent
 
-    return _copy_skill_to_destination(source_path, skill_dest, handle, tool, overwrite)
+    skill_dest = _resolve_skill_destination(handle, dest_dir, tool, repo_root)
+
+    return _copy_skill_to_destination(
+        source_path, skill_dest, handle, tool, overwrite, repo_root
+    )
 
 
 def fetch_and_install(
@@ -288,14 +366,16 @@ def fetch_and_install(
         if not source_path.is_absolute():
             source_path = (repo_root / source_path).resolve()
 
-        return install_local_skill(source_path, skills_dir, tool, overwrite)
+        return install_local_skill(
+            source_path, skills_dir, tool, overwrite, repo_root, handle
+        )
 
     # Remote skill installation
     username, repo_name = handle.get_github_repo()
 
     with downloaded_repo(username, repo_name) as repo_dir:
         return install_skill_from_repo(
-            repo_dir, handle.name, handle, skills_dir, tool, overwrite
+            repo_dir, handle.name, handle, skills_dir, tool, repo_root, overwrite
         )
 
 
@@ -358,7 +438,13 @@ def fetch_and_install_to_tools(
             try:
                 skills_dir = tool.get_skills_dir(repo_root)
                 path = install_skill_from_repo(
-                    repo_dir, handle.name, handle, skills_dir, tool, overwrite
+                    repo_dir,
+                    handle.name,
+                    handle,
+                    skills_dir,
+                    tool,
+                    repo_root,
+                    overwrite,
                 )
                 installed[tool.name] = path
             except Exception:
@@ -382,9 +468,9 @@ def uninstall_skill(
         True if removed, False if not found
     """
     skills_dir = tool.get_skills_dir(repo_root)
-    skill_path = skills_dir / handle.to_skill_path(tool)
+    skill_path = _find_existing_skill_dir(handle, skills_dir, tool, repo_root)
 
-    if not skill_path.exists():
+    if not skill_path:
         return False
 
     shutil.rmtree(skill_path)
@@ -470,5 +556,5 @@ def is_skill_installed(
         True if installed
     """
     skills_dir = tool.get_skills_dir(repo_root)
-    skill_path = skills_dir / handle.to_skill_path(tool)
-    return skill_path.exists() and is_valid_skill_dir(skill_path)
+    skill_path = _find_existing_skill_dir(handle, skills_dir, tool, repo_root)
+    return bool(skill_path and is_valid_skill_dir(skill_path))

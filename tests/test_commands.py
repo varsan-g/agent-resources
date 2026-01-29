@@ -121,7 +121,7 @@ class TestAddRemoveCommands:
         assert config.dependencies[0].path == "./my-skill"
 
         # Check installed
-        installed_dir = git_project / ".claude" / "skills" / "local--my-skill"
+        installed_dir = git_project / ".claude" / "skills" / "my-skill"
         assert installed_dir.exists()
 
     def test_remove_local_skill(self, git_project, skill_fixture):
@@ -144,7 +144,7 @@ class TestAddRemoveCommands:
         assert len(config.dependencies) == 0
 
         # Check uninstalled
-        installed_dir = git_project / ".claude" / "skills" / "local--my-skill"
+        installed_dir = git_project / ".claude" / "skills" / "my-skill"
         assert not installed_dir.exists()
 
     @pytest.mark.e2e
@@ -160,9 +160,7 @@ class TestAddRemoveCommands:
         assert config.dependencies[0].handle == "kasperjunge/migrate-to-skills"
 
         # Check installed
-        installed_dir = (
-            git_project / ".claude" / "skills" / "kasperjunge--migrate-to-skills"
-        )
+        installed_dir = git_project / ".claude" / "skills" / "migrate-to-skills"
         assert installed_dir.exists()
 
 
@@ -250,6 +248,33 @@ class TestSyncCommand:
         assert (skills_dir / "local--my-skill").exists()
         assert not (skills_dir / "org:repo:skill").exists()
         assert (skills_dir / "org--repo--skill").exists()
+
+    def test_sync_migrates_flat_double_dash_to_name(self, git_project, capsys):
+        """Sync should migrate flat double-dash names to plain skill name."""
+        from agr.commands.sync import run_sync
+
+        # Create a local skill and legacy installed dir
+        skill_dir = git_project / "my-skill"
+        skill_dir.mkdir()
+        (skill_dir / "SKILL.md").write_text("---\nname: my-skill\n---\n# Test")
+
+        skills_dir = git_project / ".claude" / "skills"
+        legacy_dir = skills_dir / "local--my-skill"
+        legacy_dir.mkdir(parents=True)
+        (legacy_dir / "SKILL.md").write_text("---\nname: local--my-skill\n---\n# Old")
+
+        (git_project / "agr.toml").write_text(
+            """
+dependencies = [
+    { path = "./my-skill", type = "skill" },
+]
+"""
+        )
+
+        run_sync()
+
+        assert not legacy_dir.exists()
+        assert (skills_dir / "my-skill").exists()
 
     @skip_on_windows
     def test_sync_skips_migration_if_target_exists(self, git_project, capsys):

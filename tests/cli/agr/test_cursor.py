@@ -123,7 +123,7 @@ class TestMultiToolCursorClaude:
         assert_cli(result).succeeded()
 
         # Claude uses flat structure
-        claude_installed = cli_project / ".claude" / "skills" / "local--test-skill"
+        claude_installed = cli_project / ".claude" / "skills" / "test-skill"
         assert claude_installed.exists()
         assert (claude_installed / "SKILL.md").exists()
 
@@ -146,7 +146,7 @@ dependencies = [
         result = agr("sync")
 
         assert_cli(result).succeeded()
-        assert (cli_project / ".claude" / "skills" / "local--test-skill").exists()
+        assert (cli_project / ".claude" / "skills" / "test-skill").exists()
         assert (cli_project / ".cursor" / "skills" / "local" / "test-skill").exists()
 
     def test_remove_removes_from_both_tools(
@@ -159,7 +159,7 @@ dependencies = [
         result = agr("remove", "./skills/test-skill")
 
         assert_cli(result).succeeded()
-        assert not (cli_project / ".claude" / "skills" / "local--test-skill").exists()
+        assert not (cli_project / ".claude" / "skills" / "test-skill").exists()
         assert not (
             cli_project / ".cursor" / "skills" / "local" / "test-skill"
         ).exists()

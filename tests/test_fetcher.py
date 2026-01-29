@@ -278,7 +278,7 @@ class TestInstallLocalSkill:
 
         assert installed_path.exists()
         assert (installed_path / SKILL_MARKER).exists()
-        assert installed_path.name == f"local--{skill_fixture.name}"
+        assert installed_path.name == skill_fixture.name
 
     def test_install_invalid_skill_raises(self, tmp_path):
         """Installing directory without SKILL.md raises."""
@@ -329,6 +329,27 @@ class TestInstallLocalSkill:
 
         with pytest.raises(AgrError, match="contains reserved sequence"):
             install_local_skill(bad_skill, dest_dir, CLAUDE)
+
+    def test_collision_uses_full_name_for_flat_tools(self, tmp_path):
+        """Second skill with same name installs using full flat name."""
+        from agr.skill import SKILL_MARKER
+
+        dest_dir = tmp_path / ".claude" / "skills"
+        dest_dir.mkdir(parents=True)
+
+        # Create two skills with the same directory name in different locations
+        skill_a = tmp_path / "a" / "test-skill"
+        skill_b = tmp_path / "b" / "test-skill"
+        skill_a.mkdir(parents=True)
+        skill_b.mkdir(parents=True)
+        (skill_a / SKILL_MARKER).write_text("# Skill A")
+        (skill_b / SKILL_MARKER).write_text("# Skill B")
+
+        first_install = install_local_skill(skill_a, dest_dir, CLAUDE)
+        second_install = install_local_skill(skill_b, dest_dir, CLAUDE)
+
+        assert first_install == dest_dir / "test-skill"
+        assert second_install == dest_dir / "local--test-skill"
 
 
 class TestUninstallSkill:
@@ -392,7 +413,7 @@ class TestGetInstalledSkills:
 
         skills = get_installed_skills(repo_root, CLAUDE)
         assert len(skills) == 1
-        assert skills[0] == f"local--{skill_fixture.name}"
+        assert skills[0] == skill_fixture.name
 
 
 class TestIsSkillInstalled:
@@ -529,8 +550,8 @@ class TestFetchAndInstallToTools:
         assert "cursor" in results
         assert results["claude"].exists()
         assert results["cursor"].exists()
-        # Claude uses flat naming
-        assert "--" in results["claude"].name
+        # Claude uses flat naming (default skill name)
+        assert results["claude"].name == skill_fixture.name
         # Cursor uses nested directories
         assert results["cursor"].parent.name == "local"
 
@@ -557,7 +578,7 @@ class TestFetchAndInstallToTools:
             )
 
         # Claude installation should be rolled back
-        claude_path = repo_root / ".claude" / "skills" / f"local--{skill_fixture.name}"
+        claude_path = repo_root / ".claude" / "skills" / skill_fixture.name
         assert not claude_path.exists()
 
     def test_empty_tools_list_raises(self, tmp_path, skill_fixture):

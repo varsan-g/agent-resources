@@ -16,7 +16,7 @@ class TestAgrAdd:
         """agr add creates skill in .claude/skills."""
         agr("add", "./skills/test-skill")
 
-        installed = cli_project / ".claude" / "skills" / "local--test-skill"
+        installed = cli_project / ".claude" / "skills" / "test-skill"
         assert installed.exists()
         assert (installed / "SKILL.md").exists()
 

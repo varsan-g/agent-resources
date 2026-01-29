@@ -1,7 +1,8 @@
 """Tool configuration for AI coding tools.
 
 All tool-specific paths and configuration are isolated in this module.
-Supports Claude Code (flat naming), Cursor (nested directories), and GitHub Copilot (flat naming).
+Supports Claude Code (flat naming), OpenAI Codex (flat naming),
+Cursor (nested directories), and GitHub Copilot (flat naming).
 """
 
 from dataclasses import dataclass
@@ -23,9 +24,9 @@ class ToolConfig:
     )
     # CLI fields for running skills with the tool
     cli_command: str | None = None  # CLI executable name
-    cli_prompt_flag: str = "-p"  # Flag to pass prompt
+    cli_prompt_flag: str | None = "-p"  # Flag to pass prompt (None = positional)
     cli_force_flag: str | None = None  # Flag to skip permission prompts
-    cli_continue_flag: str = "--continue"  # Flag to continue session
+    cli_continue_flag: str | None = "--continue"  # Flag to continue session
     install_hint: str | None = None  # Help text for installation
 
     def get_skills_dir(self, repo_root: Path) -> Path:
@@ -38,7 +39,7 @@ class ToolConfig:
         return Path.home() / base / self.skills_subdir
 
 
-# Claude Code tool configuration (flat naming: maragudk--skills--bluesky)
+# Claude Code tool configuration (flat naming: <skill-name>, fallback to user--repo--skill on collision)
 CLAUDE = ToolConfig(
     name="claude",
     config_dir=".claude",
@@ -64,7 +65,23 @@ CURSOR = ToolConfig(
     install_hint="Install Cursor IDE to get the agent CLI",
 )
 
-# GitHub Copilot tool configuration
+# OpenAI Codex tool configuration (flat naming: <skill-name>)
+# Skill paths based on OpenAI Codex documentation:
+# - Project: .codex/skills/
+# - Personal: ~/.codex/skills/
+CODEX = ToolConfig(
+    name="codex",
+    config_dir=".codex",
+    skills_subdir="skills",
+    supports_nested=False,
+    cli_command="codex",
+    cli_prompt_flag=None,  # Codex accepts prompt as positional arg
+    cli_force_flag=None,
+    cli_continue_flag=None,
+    install_hint="Install OpenAI Codex CLI (npm i -g @openai/codex)",
+)
+
+# GitHub Copilot tool configuration (flat naming: <skill-name>, fallback to user--repo--skill on collision)
 # Skills paths based on: https://docs.github.com/en/copilot/concepts/agents/about-agent-skills
 # Project: .github/skills/
 # Personal: ~/.copilot/skills/ (asymmetric from project path)
@@ -85,6 +102,7 @@ COPILOT = ToolConfig(
 TOOLS: dict[str, ToolConfig] = {
     "claude": CLAUDE,
     "cursor": CURSOR,
+    "codex": CODEX,
     "copilot": COPILOT,
 }
 

@@ -11,14 +11,14 @@ class TestCopilotAdd:
     def test_add_local_skill_to_copilot_flat_structure(
         self, agr, cli_project, cli_skill, cli_config
     ):
-        """agr add local skill installs to .github/skills/local--<name>/."""
+        """agr add local skill installs to .github/skills/<name>/."""
         cli_config('tools = ["copilot"]\ndependencies = []')
 
         result = agr("add", "./skills/test-skill")
 
         assert_cli(result).succeeded()
-        # Copilot uses flat structure: local--<name>
-        installed = cli_project / ".github" / "skills" / "local--test-skill"
+        # Copilot uses flat structure: <name>
+        installed = cli_project / ".github" / "skills" / "test-skill"
         assert installed.exists()
         assert (installed / "SKILL.md").exists()
 
@@ -26,19 +26,14 @@ class TestCopilotAdd:
     def test_add_remote_skill_to_copilot_flat_structure(
         self, agr, cli_project, cli_config
     ):
-        """agr add remote skill installs to .github/skills/<user>--<repo>--<name>/."""
+        """agr add remote skill installs to .github/skills/<name>/."""
         cli_config('tools = ["copilot"]\ndependencies = []')
 
         result = agr("add", "kasperjunge/agent-resources-public-test-repo/test-skill")
 
         assert_cli(result).succeeded()
-        # Copilot uses flat structure: user--repo--skill
-        installed = (
-            cli_project
-            / ".github"
-            / "skills"
-            / "kasperjunge--agent-resources-public-test-repo--test-skill"
-        )
+        # Copilot uses flat structure: <name>
+        installed = cli_project / ".github" / "skills" / "test-skill"
         assert installed.exists()
         assert (installed / "SKILL.md").exists()
 
@@ -62,7 +57,7 @@ dependencies = [
         result = agr("sync")
 
         assert_cli(result).succeeded()
-        installed = cli_project / ".github" / "skills" / "local--test-skill"
+        installed = cli_project / ".github" / "skills" / "test-skill"
         assert installed.exists()
 
     def test_sync_creates_github_skills_directory(
@@ -85,7 +80,7 @@ dependencies = [
 
         assert_cli(result).succeeded()
         assert github_dir.exists()
-        assert (github_dir / "skills" / "local--test-skill").exists()
+        assert (github_dir / "skills" / "test-skill").exists()
 
 
 class TestCopilotRemove:
@@ -98,7 +93,7 @@ class TestCopilotRemove:
         cli_config('tools = ["copilot"]\ndependencies = []')
         agr("add", "./skills/test-skill")
 
-        installed = cli_project / ".github" / "skills" / "local--test-skill"
+        installed = cli_project / ".github" / "skills" / "test-skill"
         assert installed.exists()
 
         result = agr("remove", "./skills/test-skill")
@@ -121,12 +116,12 @@ class TestMultiToolCopilotClaude:
         assert_cli(result).succeeded()
 
         # Claude uses .claude/skills/
-        claude_installed = cli_project / ".claude" / "skills" / "local--test-skill"
+        claude_installed = cli_project / ".claude" / "skills" / "test-skill"
         assert claude_installed.exists()
         assert (claude_installed / "SKILL.md").exists()
 
         # Copilot uses .github/skills/
-        copilot_installed = cli_project / ".github" / "skills" / "local--test-skill"
+        copilot_installed = cli_project / ".github" / "skills" / "test-skill"
         assert copilot_installed.exists()
         assert (copilot_installed / "SKILL.md").exists()
 
@@ -146,8 +141,8 @@ dependencies = [
         result = agr("sync")
 
         assert_cli(result).succeeded()
-        assert (cli_project / ".claude" / "skills" / "local--test-skill").exists()
-        assert (cli_project / ".github" / "skills" / "local--test-skill").exists()
+        assert (cli_project / ".claude" / "skills" / "test-skill").exists()
+        assert (cli_project / ".github" / "skills" / "test-skill").exists()
 
     def test_remove_removes_from_both_claude_and_copilot(
         self, agr, cli_project, cli_skill, cli_config
@@ -159,5 +154,5 @@ dependencies = [
         result = agr("remove", "./skills/test-skill")
 
         assert_cli(result).succeeded()
-        assert not (cli_project / ".claude" / "skills" / "local--test-skill").exists()
-        assert not (cli_project / ".github" / "skills" / "local--test-skill").exists()
+        assert not (cli_project / ".claude" / "skills" / "test-skill").exists()
+        assert not (cli_project / ".github" / "skills" / "test-skill").exists()

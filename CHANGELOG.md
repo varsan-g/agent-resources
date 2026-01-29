@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+### Added
+- Sync migration for flat tools now records metadata for accurate matching
+
+### Changed
+- Flat tools install skills using the plain skill name by default, falling back to full handle on collisions
+- Sync now migrates flat `user--repo--skill` directories to plain names when safe
+
 ## [0.7.1b2] - 2026-01-28
 
 ### Added

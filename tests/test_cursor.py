@@ -52,7 +52,7 @@ class TestNestedPaths:
     def test_remote_skill_flat_path(self):
         """Remote skill gets flat path for Claude."""
         h = ParsedHandle(username="maragudk", repo="skills", name="collab")
-        assert h.to_skill_path(CLAUDE) == Path("maragudk--skills--collab")
+        assert h.to_skill_path(CLAUDE) == Path("collab")
 
     def test_remote_skill_nested_path(self):
         """Remote skill gets nested path for Cursor."""
@@ -62,7 +62,7 @@ class TestNestedPaths:
     def test_remote_skill_no_repo_flat(self):
         """Remote skill without repo gets flat path for Claude."""
         h = ParsedHandle(username="kasperjunge", name="commit")
-        assert h.to_skill_path(CLAUDE) == Path("kasperjunge--commit")
+        assert h.to_skill_path(CLAUDE) == Path("commit")
 
     def test_remote_skill_no_repo_nested(self):
         """Remote skill without repo gets nested path for Cursor."""
@@ -72,7 +72,7 @@ class TestNestedPaths:
     def test_local_skill_flat_path(self):
         """Local skill gets flat path for Claude."""
         h = ParsedHandle(is_local=True, name="my-skill")
-        assert h.to_skill_path(CLAUDE) == Path("local--my-skill")
+        assert h.to_skill_path(CLAUDE) == Path("my-skill")
 
     def test_local_skill_nested_path(self):
         """Local skill gets nested path for Cursor."""
@@ -84,9 +84,9 @@ class TestSkillNameForTool:
     """Tests for SKILL.md name field based on tool."""
 
     def test_skill_name_flat(self):
-        """Flat tools get full installed name."""
+        """Flat tools default to the skill name."""
         h = ParsedHandle(username="maragudk", repo="skills", name="collab")
-        assert h.get_skill_name_for_tool(CLAUDE) == "maragudk--skills--collab"
+        assert h.get_skill_name_for_tool(CLAUDE) == "collab"
 
     def test_skill_name_nested(self):
         """Nested tools get just the skill name."""
@@ -94,9 +94,9 @@ class TestSkillNameForTool:
         assert h.get_skill_name_for_tool(CURSOR) == "collab"
 
     def test_local_skill_name_flat(self):
-        """Local skills get prefixed name for flat tools."""
+        """Local skills default to the skill name for flat tools."""
         h = ParsedHandle(is_local=True, name="my-skill")
-        assert h.get_skill_name_for_tool(CLAUDE) == "local--my-skill"
+        assert h.get_skill_name_for_tool(CLAUDE) == "my-skill"
 
     def test_local_skill_name_nested(self):
         """Local skills get just the name for nested tools."""
@@ -180,7 +180,7 @@ class TestMultiToolInstallation:
         install_local_skill(skill_fixture, cursor_skills, CURSOR)
 
         # Verify Claude has flat structure
-        claude_path = claude_skills / f"local--{skill_fixture.name}"
+        claude_path = claude_skills / skill_fixture.name
         assert claude_path.exists()
         assert (claude_path / SKILL_MARKER).exists()
 

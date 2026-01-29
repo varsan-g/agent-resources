@@ -20,7 +20,7 @@ class TestAgrRemove:
         """agr remove deletes installed directory."""
         agr("add", "./skills/test-skill")
 
-        installed = cli_project / ".claude" / "skills" / "local--test-skill"
+        installed = cli_project / ".claude" / "skills" / "test-skill"
         assert installed.exists()
 
         agr("remove", "./skills/test-skill")

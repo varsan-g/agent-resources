@@ -69,6 +69,17 @@ def _cleanup_skill(skill_path: Path) -> None:
             pass  # Best effort cleanup
 
 
+def _build_skill_command(tool_config: ToolConfig, skill_prompt: str) -> list[str]:
+    """Build the command to run a skill with the selected tool."""
+    assert tool_config.cli_command is not None
+    cmd = [tool_config.cli_command]
+    if tool_config.cli_prompt_flag:
+        cmd.extend([tool_config.cli_prompt_flag, skill_prompt])
+    else:
+        cmd.append(skill_prompt)
+    return cmd
+
+
 @app.command()
 def main(
     handle: Annotated[
@@ -82,7 +93,7 @@ def main(
         typer.Option(
             "--tool",
             "-t",
-            help="Tool CLI to use (claude, cursor, copilot).",
+            help="Tool CLI to use (claude, cursor, codex, copilot).",
         ),
     ] = None,
     interactive: Annotated[
@@ -120,6 +131,7 @@ def main(
         agrx maragudk/skills/collaboration -i
         agrx kasperjunge/commit -p "Review my changes"
         agrx kasperjunge/commit --tool cursor
+        agrx kasperjunge/commit --tool codex
     """
     # Determine which tool to use
     tool_name = tool or _get_default_tool()
@@ -134,6 +146,7 @@ def main(
     tool_config = get_tool(tool_name)
 
     # Find repo root (or use global dir)
+    repo_root: Path | None = None
     if global_install:
         skills_dir = tool_config.get_global_skills_dir()
     else:
@@ -170,21 +183,21 @@ def main(
         with downloaded_repo(username, repo_name) as repo_dir:
             # Create a modified handle for the prefixed installation
             temp_handle = ParsedHandle(
-                username=AGRX_PREFIX.rstrip("_"),
-                name=parsed.name,
+                username=parsed.username,
+                repo=parsed.repo,
+                name=prefixed_name,
             )
 
-            install_skill_from_repo(
+            installed_path = install_skill_from_repo(
                 repo_dir,
                 parsed.name,
                 temp_handle,
                 skills_dir,
                 tool_config,
+                repo_root,
                 overwrite=True,
             )
 
-        # Get the actual installed path based on tool's path structure
-        installed_path = skills_dir / temp_handle.to_skill_path(tool_config)
         # For consistency, update temp_skill_path to match
         temp_skill_path = installed_path
 
@@ -206,28 +219,30 @@ def main(
                 f"[dim]Running skill '{parsed.name}' with {tool_name}...[/dim]"
             )
 
-            # Build the skill prompt
-            skill_prompt = f"/{prefixed_name}"
+            # Build the skill prompt from the actual installed name
+            skill_prompt = f"/{temp_skill_path.name}"
             if prompt:
                 skill_prompt += f" {prompt}"
 
             # Run the appropriate CLI
             cli_cmd = tool_config.cli_command
+            assert cli_cmd is not None
             if interactive:
                 # Run the skill first, then continue in interactive mode
-                cmd = [cli_cmd, tool_config.cli_prompt_flag, skill_prompt]
+                cmd = _build_skill_command(tool_config, skill_prompt)
                 if tool_config.cli_force_flag:
                     cmd.append(tool_config.cli_force_flag)
                 subprocess.run(cmd, check=False)
 
-                console.print("[dim]Continuing in interactive mode...[/dim]")
-                subprocess.run([cli_cmd, tool_config.cli_continue_flag], check=False)
+                if tool_config.cli_continue_flag:
+                    console.print("[dim]Continuing in interactive mode...[/dim]")
+                    subprocess.run(
+                        [cli_cmd, tool_config.cli_continue_flag], check=False
+                    )
             else:
                 # Just run the skill
-                subprocess.run(
-                    [cli_cmd, tool_config.cli_prompt_flag, skill_prompt],
-                    check=False,
-                )
+                cmd = _build_skill_command(tool_config, skill_prompt)
+                subprocess.run(cmd, check=False)
 
         finally:
             # Restore signal handlers
