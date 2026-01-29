@@ -29,6 +29,8 @@ Install agr CLI:
 pip install agr
 ```
 
+> Requires Python 3.12 or higher.
+
 Install your first skill:
 
 ```bash
