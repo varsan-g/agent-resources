@@ -189,7 +189,13 @@ def downloaded_repo(
             result = _clone_repo(repo_url, repo_dir, partial=False)
 
         if result.returncode != 0:
-            _raise_clone_error(result.stderr, owner, repo_name, source)
+            _raise_clone_error(
+                result.stderr,
+                owner,
+                repo_name,
+                source,
+                stdout=result.stdout,
+            )
 
         yield repo_dir
 
@@ -267,10 +273,16 @@ def _reset_repo_dir(repo_dir: Path) -> None:
 
 
 def _raise_clone_error(
-    stderr: str | None, owner: str, repo_name: str, source: SourceConfig
+    stderr: str | None,
+    owner: str,
+    repo_name: str,
+    source: SourceConfig,
+    stdout: str | None = None,
 ) -> None:
     """Raise a friendly error based on git clone output."""
-    message = (stderr or "").strip()
+    message = "\n".join(
+        part for part in ((stderr or "").strip(), (stdout or "").strip()) if part
+    ).strip()
     lowered = message.lower()
 
     if "authentication failed" in lowered or "permission denied" in lowered:
