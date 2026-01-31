@@ -112,7 +112,7 @@ def main(
         typer.Option(
             "--tool",
             "-t",
-            help="Tool CLI to use (claude, cursor, codex, copilot).",
+            help="Tool CLI to use (claude, cursor, codex, opencode, copilot).",
         ),
     ] = None,
     interactive: Annotated[
@@ -159,6 +159,7 @@ def main(
         agrx kasperjunge/commit -p "Review my changes"
         agrx kasperjunge/commit --tool cursor
         agrx kasperjunge/commit --tool codex
+        agrx kasperjunge/commit --tool opencode
     """
     # Determine which tool to use
     tool_name = tool or _get_default_tool()

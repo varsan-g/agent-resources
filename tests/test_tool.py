@@ -1,6 +1,6 @@
 """Tests for agr.tool module."""
 
-from agr.tool import CLAUDE, CODEX, COPILOT, CURSOR, TOOLS, get_tool
+from agr.tool import CLAUDE, CODEX, COPILOT, CURSOR, OPENCODE, TOOLS, get_tool
 
 
 class TestToolConfig:
@@ -11,26 +11,30 @@ class TestToolConfig:
         assert CLAUDE.cli_command == "claude"
         assert CURSOR.cli_command == "agent"
         assert CODEX.cli_command == "codex"
+        assert OPENCODE.cli_command == "opencode"
         assert COPILOT.cli_command == "copilot"
 
     def test_tool_config_has_cli_flags(self):
         """ToolConfig includes CLI flag fields."""
-        # All tools have prompt flag
+        # Tools have prompt flag configuration
         assert CLAUDE.cli_prompt_flag == "-p"
         assert CURSOR.cli_prompt_flag == "-p"
         assert CODEX.cli_prompt_flag is None
+        assert OPENCODE.cli_prompt_flag is None
         assert COPILOT.cli_prompt_flag == "-p"
 
         # Each tool has its own force flag
         assert CLAUDE.cli_force_flag == "--dangerously-skip-permissions"
         assert CURSOR.cli_force_flag == "--force"
         assert CODEX.cli_force_flag is None
+        assert OPENCODE.cli_force_flag is None
         assert COPILOT.cli_force_flag == "--allow-all-tools"
 
         # All tools have continue flag
         assert CLAUDE.cli_continue_flag == "--continue"
         assert CURSOR.cli_continue_flag == "--continue"
         assert CODEX.cli_continue_flag is None
+        assert OPENCODE.cli_continue_flag == "--continue"
         assert COPILOT.cli_continue_flag == "--continue"
 
     def test_tool_config_has_cli_commands(self):
@@ -38,11 +42,13 @@ class TestToolConfig:
         assert CLAUDE.cli_exec_command is None
         assert CURSOR.cli_exec_command is None
         assert CODEX.cli_exec_command == ["codex", "exec"]
+        assert OPENCODE.cli_exec_command == ["opencode", "run"]
         assert COPILOT.cli_exec_command is None
 
         assert CLAUDE.cli_continue_command is None
         assert CURSOR.cli_continue_command is None
         assert CODEX.cli_continue_command == ["codex", "resume", "--last"]
+        assert OPENCODE.cli_continue_command is None
         assert COPILOT.cli_continue_command is None
 
     def test_tool_config_has_output_handling(self):
@@ -50,6 +56,7 @@ class TestToolConfig:
         assert CLAUDE.suppress_stderr_non_interactive is False
         assert CURSOR.suppress_stderr_non_interactive is False
         assert CODEX.suppress_stderr_non_interactive is True
+        assert OPENCODE.suppress_stderr_non_interactive is False
         assert COPILOT.suppress_stderr_non_interactive is False
 
     def test_tool_config_has_interactive_prompt_mode(self):
@@ -57,14 +64,17 @@ class TestToolConfig:
         assert CLAUDE.cli_interactive_prompt_positional is True
         assert CURSOR.cli_interactive_prompt_positional is True
         assert CODEX.cli_interactive_prompt_positional is False
+        assert OPENCODE.cli_interactive_prompt_positional is False
         assert COPILOT.cli_interactive_prompt_positional is False
         assert CLAUDE.cli_interactive_prompt_flag is None
         assert CURSOR.cli_interactive_prompt_flag is None
         assert CODEX.cli_interactive_prompt_flag is None
+        assert OPENCODE.cli_interactive_prompt_flag == "--prompt"
         assert COPILOT.cli_interactive_prompt_flag == "-i"
         assert CLAUDE.skill_prompt_prefix == "/"
         assert CURSOR.skill_prompt_prefix == "/"
         assert CODEX.skill_prompt_prefix == "$"
+        assert OPENCODE.skill_prompt_prefix == ""
         assert COPILOT.skill_prompt_prefix == "/"
 
     def test_tool_config_has_install_hint(self):
@@ -72,6 +82,7 @@ class TestToolConfig:
         assert CLAUDE.install_hint is not None
         assert CURSOR.install_hint is not None
         assert CODEX.install_hint is not None
+        assert OPENCODE.install_hint is not None
         assert COPILOT.install_hint is not None
 
     def test_all_tools_have_cli_config(self):
@@ -103,6 +114,7 @@ class TestGetTool:
         assert get_tool("claude") == CLAUDE
         assert get_tool("cursor") == CURSOR
         assert get_tool("codex") == CODEX
+        assert get_tool("opencode") == OPENCODE
         assert get_tool("copilot") == COPILOT
 
     def test_get_tool_unknown_raises(self):

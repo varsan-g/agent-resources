@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+### Added
+- OpenCode tool support with `.opencode/skill/` install path, CLI integration, and docs updates
+
 ## [0.7.2b2] - 2026-01-31
 
 ### Added

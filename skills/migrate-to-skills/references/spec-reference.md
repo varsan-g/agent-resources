@@ -12,7 +12,7 @@ Skills are discovered in these locations (in order of precedence):
 | Cursor | `.cursor/skills/<name>/SKILL.md` | `~/.cursor/skills/<name>/SKILL.md` |
 | GitHub Copilot | `.github/skills/<name>/SKILL.md` | `~/.copilot/skills/<name>/SKILL.md` |
 | Codex | `.codex/skills/<name>/SKILL.md` | `~/.codex/skills/<name>/SKILL.md` |
-| Open Code | `.opencode/skills/<name>/SKILL.md` | `~/.config/opencode/skills/<name>/SKILL.md` |
+| Open Code | `.opencode/skill/<name>/SKILL.md` | `~/.config/opencode/skill/<name>/SKILL.md` |
 
 **Cross-compatibility**: Most tools also read `.claude/skills/` for interoperability.
 
@@ -147,7 +147,7 @@ The body contains Markdown instructions:
 - AGENTS.md support for simple rules
 
 ### Open Code
-- Skills in `.opencode/skills/` or `.claude/skills/`
+- Skills in `.opencode/skill/` or `.claude/skills/`
 - Commands in `.opencode/commands/`
 - Built-in agents: Build (full), Plan (analysis), Explore (read-only)
 - Subagent types: General, Explore

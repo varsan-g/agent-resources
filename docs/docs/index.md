@@ -133,7 +133,7 @@ agr init -i    # Guided setup
 ```
 
 By default, skills inside tool folders (e.g. `.claude/skills/`, `.codex/skills/`,
-`.cursor/skills/`, `.github/skills/`) are ignored to avoid messy configs. To
+`.cursor/skills/`, `.opencode/skill/`, `.github/skills/`) are ignored to avoid messy configs. To
 bring them into your repo, run:
 
 ```bash

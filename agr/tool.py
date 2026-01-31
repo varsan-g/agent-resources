@@ -2,7 +2,8 @@
 
 All tool-specific paths and configuration are isolated in this module.
 Supports Claude Code (flat naming), OpenAI Codex (flat naming),
-Cursor (nested directories), and GitHub Copilot (flat naming).
+Cursor (nested directories), OpenCode (flat naming), and
+GitHub Copilot (flat naming).
 """
 
 from dataclasses import dataclass
@@ -95,6 +96,25 @@ CODEX = ToolConfig(
     install_hint="Install OpenAI Codex CLI (npm i -g @openai/codex)",
 )
 
+# OpenCode tool configuration (flat naming: <skill-name>)
+# Skill paths based on OpenCode documentation:
+# - Project: .opencode/skill/
+# - Personal: ~/.config/opencode/skill/
+OPENCODE = ToolConfig(
+    name="opencode",
+    config_dir=".opencode",
+    skills_subdir="skill",
+    supports_nested=False,
+    global_config_dir=".config/opencode",
+    cli_command="opencode",
+    cli_prompt_flag=None,  # opencode run accepts prompt as positional args
+    cli_continue_flag="--continue",
+    cli_exec_command=["opencode", "run"],
+    cli_interactive_prompt_flag="--prompt",
+    skill_prompt_prefix="",
+    install_hint="Install OpenCode CLI (https://opencode.ai/docs/cli/)",
+)
+
 # GitHub Copilot tool configuration (flat naming: <skill-name>, fallback to user--repo--skill on collision)
 # Skills paths based on: https://docs.github.com/en/copilot/concepts/agents/about-agent-skills
 # Project: .github/skills/
@@ -118,6 +138,7 @@ TOOLS: dict[str, ToolConfig] = {
     "claude": CLAUDE,
     "cursor": CURSOR,
     "codex": CODEX,
+    "opencode": OPENCODE,
     "copilot": COPILOT,
 }
 

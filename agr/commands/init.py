@@ -370,7 +370,7 @@ def run_init(
         console.print(
             "[yellow]Note:[/yellow] "
             f"Found {len(tool_skills)} skills in tool folders "
-            "(.claude/skills, .codex/skills, .cursor/skills, .github/skills). "
+            "(.claude/skills, .codex/skills, .cursor/skills, .opencode/skill, .github/skills). "
             "Run `agr init --migrate` to move them into ./skills/."
         )
 

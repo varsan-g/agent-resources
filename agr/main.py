@@ -108,7 +108,7 @@ def init(
         Optional[str],
         typer.Option(
             "--tools",
-            help="Comma-separated tool list (e.g., claude,codex).",
+            help="Comma-separated tool list (e.g., claude,codex,opencode).",
         ),
     ] = None,
     default_tool: Annotated[

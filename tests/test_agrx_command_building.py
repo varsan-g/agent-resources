@@ -1,6 +1,6 @@
 """Tests for agrx command construction."""
 
-from agr.tool import CLAUDE, CODEX, COPILOT, CURSOR
+from agr.tool import CLAUDE, CODEX, COPILOT, CURSOR, OPENCODE
 from agrx.main import _build_skill_command
 
 
@@ -26,3 +26,15 @@ def test_build_skill_command_non_interactive_cursor_flag():
     """Cursor non-interactive uses -p prompt flag."""
     cmd = _build_skill_command(CURSOR, "/skill prompt", non_interactive=True)
     assert cmd == ["agent", "-p", "/skill prompt"]
+
+
+def test_build_skill_command_non_interactive_opencode_run():
+    """OpenCode non-interactive uses run subcommand with positional prompt."""
+    cmd = _build_skill_command(OPENCODE, "skill prompt", non_interactive=True)
+    assert cmd == ["opencode", "run", "skill prompt"]
+
+
+def test_build_skill_command_interactive_opencode_prompt_flag():
+    """OpenCode interactive uses --prompt flag."""
+    cmd = _build_skill_command(OPENCODE, "skill prompt", non_interactive=False)
+    assert cmd == ["opencode", "--prompt", "skill prompt"]
