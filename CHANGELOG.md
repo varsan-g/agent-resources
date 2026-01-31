@@ -2,6 +2,23 @@
 
 ## [Unreleased]
 
+### Added
+- `agr init` now auto-discovers local skills, detects tool folders, and can migrate tool-folder skills into `./skills/`
+- New configuration keys for tool defaults and instruction sync: `default_tool`, `sync_instructions`, `canonical_instructions`
+- Instruction file sync during `agr sync` when configured for multiple tools
+- New bundled skills: discover-assumptions, discover-opportunities, discover-outcomes, enhance-docs, skriv-som-kasper
+
+### Changed
+- `agr sync` reuses a single repo download to install multiple skills from the same source
+- `agrx` now uses `default_tool` from `agr.toml` when set
+- Handle parsing prefers existing local paths unless explicitly parsing remote handles
+
+### Fixed
+- Local installs now backfill missing metadata when the source path already matches the destination
+
+### Removed
+- GitHub Actions workflows for docs and publish automation
+
 ## [0.7.2b1] - 2026-01-31
 
 ### Added

@@ -4,13 +4,25 @@ title: Reference
 
 # Reference
 
+## Common Workflows
+
+| Goal | Command(s) |
+|------|------------|
+| Install a skill for your tool | `agr add <handle>` |
+| Run a skill once | `agrx <handle>` |
+| Team sync | Add to `agr.toml`, then `agr sync` |
+| Create a new skill | `agr init <name>` |
+| Migrate old rules/commands | `agrx kasperjunge/migrate-to-skills` |
+
 ## CLI Commands
 
 **Beta note:** Multi-source support is only in the beta release right now. Install `agr==0.7.2b1` to use `default_source`, `[[source]]`, or `--source`.
 
 ### agr add
 
-Install skills from GitHub or local paths.
+Install skills from GitHub or local paths. Skills are installed into your tool's
+skills folder (e.g. `.claude/skills/`, `.codex/skills/`, `.cursor/skills/`,
+`.github/skills/`).
 
 ```bash
 agr add <handle>...
@@ -73,18 +85,40 @@ Displays skills from `agr.toml` and whether they're installed.
 
 ### agr init
 
-Create `agr.toml` or a skill scaffold.
+Create `agr.toml` (with auto-discovery) or a skill scaffold.
 
 ```bash
 agr init              # Create agr.toml
 agr init <name>       # Create skill scaffold
 ```
 
+By default, `agr init` discovers skills in the repo (based on the skills
+spec) and adds them to `agr.toml` as local path dependencies. It also
+detects tools from existing tool folders when available.
+
+Skills inside tool folders (e.g. `.claude/skills/`, `.codex/skills/`,
+`.cursor/skills/`, `.github/skills/`) are ignored by default to keep configs
+clean. Use `--migrate` to move them into `./skills/`.
+
+**Options:**
+
+- `--interactive`, `-i` — Run a guided setup wizard
+- `--tools` — Comma-separated tool list (e.g., `claude,codex`)
+- `--default-tool` — Default tool for `agrx` and instruction sync
+- `--sync-instructions/--no-sync-instructions` — Sync instruction files on `agr sync`
+- `--canonical-instructions` — Canonical instruction file (`AGENTS.md` or `CLAUDE.md`)
+- `--migrate` — Move tool-folder skills into `./skills/`
+- `--prefer` — Duplicate resolution (`shallowest` or `newest`)
+
 **Examples:**
 
 ```bash
 agr init                    # Creates agr.toml in current directory
 agr init my-skill           # Creates my-skill/SKILL.md
+agr init -i                 # Guided setup
+agr init --tools claude,codex --default-tool claude
+agr init --sync-instructions --canonical-instructions CLAUDE.md
+agr init --migrate          # Copy skills into ./skills/
 ```
 
 ### agrx
@@ -117,11 +151,15 @@ agrx kasperjunge/commit --source github
 
 ```toml
 default_source = "github"
+tools = ["claude", "codex"]
+default_tool = "claude"
+sync_instructions = true
+canonical_instructions = "CLAUDE.md"
 
 dependencies = [
-    {handle = "anthropics/skills/frontend-design"},
-    {handle = "kasperjunge/commit"},
-    {handle = "./local-skill"},
+    {handle = "anthropics/skills/frontend-design", type = "skill"},
+    {handle = "kasperjunge/commit", type = "skill"},
+    {path = "./local-skill", type = "skill"},
 ]
 
 [[source]]
@@ -132,10 +170,20 @@ url = "https://github.com/{owner}/{repo}.git"
 
 Each dependency has:
 
-- `handle` — Remote handle or local path
+- `handle` — Remote handle
+- `path` — Local path
 - `source` — Optional source name for remote handles
+- `type` — Currently always `skill`
 
 Note: `dependencies` must appear before any `[[source]]` blocks in `agr.toml`.
+
+### Top-Level Keys
+
+- `default_source` — Name of the default `[[source]]` for remote installs
+- `tools` — List of tools to sync instructions/skills to
+- `default_tool` — Default tool used by `agrx`
+- `sync_instructions` — Sync instruction files on `agr sync`
+- `canonical_instructions` — Canonical instruction file (`AGENTS.md` or `CLAUDE.md`)
 
 ## Troubleshooting
 

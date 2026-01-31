@@ -4,7 +4,8 @@ title: Creating Skills
 
 # Creating Skills
 
-Skills are folders of instructions that give AI agents new capabilities.
+Skills are folders of instructions that give AI agents new capabilities. This
+guide helps you create, test, and share a skill with minimal ceremony.
 
 ## Quick Start
 
@@ -18,6 +19,20 @@ Creates `my-skill/SKILL.md` in your current directory:
 my-skill/
 └── SKILL.md
 ```
+
+If you're adding the skill to this repo, place it under `./skills/`:
+
+```
+skills/
+└── my-skill/
+    └── SKILL.md
+```
+
+From there you can:
+
+1. Write the instructions in `SKILL.md`
+2. Add the skill to your tool with `agr add ./skills/my-skill`
+3. Add it to `agr.toml` for team sync (see below)
 
 ## SKILL.md Format
 
@@ -104,10 +119,30 @@ Keep your main SKILL.md under 500 lines. Put detailed reference material in the 
 Add your local skill and test it:
 
 ```bash
-agr add ./my-skill
+agr add ./skills/my-skill
 ```
 
-Your skill is now available in your configured tool. Test it by starting your agent and invoking the skill.
+(If your skill is elsewhere, point to that path instead.)
+
+Your skill is now available in your configured tool. Test it by starting your
+agent and invoking the skill.
+
+## Add to agr.toml (Team Sync)
+
+To share a skill with your team, add it to `agr.toml` as a local path
+dependency:
+
+```toml
+dependencies = [
+    {path = "./skills/my-skill", type = "skill"},
+]
+```
+
+Teammates run:
+
+```bash
+agr sync
+```
 
 ## Share with Others
 
