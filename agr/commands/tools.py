@@ -117,6 +117,7 @@ def run_tools_add(tool_names: list[str]) -> None:
         )
 
         new_tools = [TOOLS[name] for name in added]
+        resolver = config.get_source_resolver()
         sync_errors = 0
 
         for dep in config.dependencies:
@@ -124,8 +125,10 @@ def run_tools_add(tool_names: list[str]) -> None:
                 # Parse handle
                 if dep.is_local:
                     ref = dep.path or ""
+                    source_name = None
                 else:
                     ref = dep.handle or ""
+                    source_name = dep.source or config.default_source
 
                 handle = parse_handle(ref)
 
@@ -133,7 +136,7 @@ def run_tools_add(tool_names: list[str]) -> None:
                 tools_needing_install = [
                     tool
                     for tool in new_tools
-                    if not is_skill_installed(handle, repo_root, tool)
+                    if not is_skill_installed(handle, repo_root, tool, source_name)
                 ]
 
                 if not tools_needing_install:
@@ -141,7 +144,12 @@ def run_tools_add(tool_names: list[str]) -> None:
 
                 # Install to new tools
                 fetch_and_install_to_tools(
-                    handle, repo_root, tools_needing_install, overwrite=False
+                    handle,
+                    repo_root,
+                    tools_needing_install,
+                    overwrite=False,
+                    resolver=resolver,
+                    source=source_name,
                 )
 
                 tool_list = ", ".join(t.name for t in tools_needing_install)

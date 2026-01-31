@@ -10,7 +10,9 @@ from agr.handle import parse_handle
 console = Console()
 
 
-def run_add(refs: list[str], overwrite: bool = False) -> None:
+def run_add(
+    refs: list[str], overwrite: bool = False, source: str | None = None
+) -> None:
     """Run the add command.
 
     Args:
@@ -33,6 +35,7 @@ def run_add(refs: list[str], overwrite: bool = False) -> None:
 
     # Get configured tools
     tools = config.get_tools()
+    resolver = config.get_source_resolver()
 
     # Track results for summary
     results: list[tuple[str, bool, str]] = []  # (ref, success, message)
@@ -42,9 +45,21 @@ def run_add(refs: list[str], overwrite: bool = False) -> None:
             # Parse handle
             handle = parse_handle(ref)
 
+            if source and handle.is_local:
+                raise AgrError("Local skills cannot specify a source")
+
+            # Validate explicit source if provided
+            if source:
+                resolver.get(source)
+
             # Install the skill to all configured tools (downloads once)
             installed_paths_dict = fetch_and_install_to_tools(
-                handle, repo_root, tools, overwrite
+                handle,
+                repo_root,
+                tools,
+                overwrite,
+                resolver=resolver,
+                source=source,
             )
             installed_paths = [
                 f"{name}: {path}" for name, path in installed_paths_dict.items()
@@ -63,6 +78,7 @@ def run_add(refs: list[str], overwrite: bool = False) -> None:
                     Dependency(
                         type="skill",
                         handle=handle.to_toml_handle(),
+                        source=source,
                     )
                 )
 

@@ -81,6 +81,68 @@ def cli_config(cli_project: Path):
 
 
 @pytest.fixture
+def git_source_repo(tmp_path: Path):
+    """Create a local git repo with a skill for testing sources."""
+    base_dir = tmp_path / "sources"
+    base_dir.mkdir(parents=True, exist_ok=True)
+
+    def _create_repo(
+        owner: str = "acme",
+        repo: str = "tools",
+        skill_name: str = "test-skill",
+        body: str = "Source Skill",
+        base: Path | None = None,
+    ) -> Path:
+        root = base or base_dir
+        repo_dir = root / owner / repo
+        repo_dir.mkdir(parents=True, exist_ok=True)
+        subprocess.run(["git", "init"], cwd=repo_dir, capture_output=True, check=True)
+        subprocess.run(
+            ["git", "checkout", "-b", "main"],
+            cwd=repo_dir,
+            capture_output=True,
+            check=True,
+        )
+        subprocess.run(
+            ["git", "config", "user.email", "test@test.com"],
+            cwd=repo_dir,
+            capture_output=True,
+            check=True,
+        )
+        subprocess.run(
+            ["git", "config", "user.name", "Test"],
+            cwd=repo_dir,
+            capture_output=True,
+            check=True,
+        )
+
+        skill_dir = repo_dir / "skills" / skill_name
+        skill_dir.mkdir(parents=True, exist_ok=True)
+        (skill_dir / "SKILL.md").write_text(
+            f"""---
+name: {skill_name}
+---
+
+# {skill_name}
+
+{body}
+"""
+        )
+        subprocess.run(
+            ["git", "add", "."], cwd=repo_dir, capture_output=True, check=True
+        )
+        subprocess.run(
+            ["git", "commit", "-m", "init"],
+            cwd=repo_dir,
+            capture_output=True,
+            check=True,
+        )
+        return repo_dir
+
+    return base_dir, _create_repo
+
+
+@pytest.fixture
 def agr(cli_project: Path):
     """Helper to run agr commands in the project."""
 

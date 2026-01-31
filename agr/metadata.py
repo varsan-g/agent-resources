@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from agr.handle import ParsedHandle
+from agr.source import DEFAULT_SOURCE_NAME
 
 METADATA_FILENAME = ".agr.json"
 
@@ -22,11 +23,15 @@ def _resolve_local_path(handle: ParsedHandle, repo_root: Path | None) -> Path | 
     return (base / handle.local_path).resolve()
 
 
-def build_handle_id(handle: ParsedHandle, repo_root: Path | None) -> str:
+def build_handle_id(
+    handle: ParsedHandle, repo_root: Path | None, source: str | None = None
+) -> str:
     """Build a stable identifier for a handle."""
     if handle.is_local:
         resolved = _resolve_local_path(handle, repo_root)
         return f"local:{resolved}" if resolved else "local:"
+    if source:
+        return f"remote:{source}:{handle.to_toml_handle()}"
     return f"remote:{handle.to_toml_handle()}"
 
 
@@ -50,11 +55,12 @@ def write_skill_metadata(
     repo_root: Path | None,
     tool_name: str,
     installed_name: str,
+    source: str | None = None,
 ) -> None:
     """Write metadata for an installed skill."""
     resolved_local = _resolve_local_path(handle, repo_root)
     data: dict[str, Any] = {
-        "id": build_handle_id(handle, repo_root),
+        "id": build_handle_id(handle, repo_root, source),
         "tool": tool_name,
         "installed_name": installed_name,
     }
@@ -64,6 +70,7 @@ def write_skill_metadata(
     else:
         data["type"] = "remote"
         data["handle"] = handle.to_toml_handle()
+        data["source"] = source or DEFAULT_SOURCE_NAME
 
     metadata_path = skill_dir / METADATA_FILENAME
     metadata_path.write_text(json.dumps(data, indent=2, ensure_ascii=True) + "\n")

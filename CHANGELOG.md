@@ -2,6 +2,17 @@
 
 ## [Unreleased]
 
+### Added
+- Multi-source configuration with `default_source` and `[[source]]` entries in `agr.toml`
+- `--source` flag on CLI commands to explicitly select a source
+
+### Changed
+- Remote skill fetching now uses git clone with sparse checkout for faster, auth-flexible downloads
+- Skill metadata now records source to disambiguate duplicate names across sources
+
+### Fixed
+- Small fixes across CLI, docs, and tests
+
 ## [0.7.1] - 2026-01-29
 
 ### Added

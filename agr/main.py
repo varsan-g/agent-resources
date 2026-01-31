@@ -125,6 +125,14 @@ def add(
             help="Overwrite existing skills.",
         ),
     ] = False,
+    source: Annotated[
+        Optional[str],
+        typer.Option(
+            "--source",
+            "-s",
+            help="Source name to use for this install.",
+        ),
+    ] = None,
 ) -> None:
     """Add skills from GitHub or local paths.
 
@@ -134,7 +142,7 @@ def add(
         agr add ./my-skill
         agr add kasperjunge/commit kasperjunge/pr  # Multiple
     """
-    run_add(refs, overwrite)
+    run_add(refs, overwrite, source)
 
 
 @app.command()

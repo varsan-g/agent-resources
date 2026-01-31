@@ -1,10 +1,10 @@
 """Tests for agr.fetcher module."""
 
 from pathlib import Path
+import shutil
+import subprocess
 
 import pytest
-import respx
-from httpx import Response
 
 from agr.exceptions import (
     AgrError,
@@ -25,12 +25,13 @@ from agr.fetcher import (
 )
 from agr.handle import ParsedHandle
 from agr.metadata import build_handle_id, read_skill_metadata
+from agr.source import SourceConfig
 from agr.skill import SKILL_MARKER
 from agr.tool import CLAUDE, CURSOR
 
 
-class TestGitHubAuthentication:
-    """Tests for GitHub token authentication."""
+class TestGitAuthentication:
+    """Tests for GitHub token handling."""
 
     def test_get_github_token_returns_value(self, monkeypatch):
         """Token is returned when GITHUB_TOKEN is set."""
@@ -41,18 +42,6 @@ class TestGitHubAuthentication:
     def test_get_github_token_returns_none_when_unset(self, monkeypatch):
         """None returned when no token env vars are set."""
         monkeypatch.delenv("GITHUB_TOKEN", raising=False)
-        monkeypatch.delenv("GH_TOKEN", raising=False)
-        assert _get_github_token() is None
-
-    def test_get_github_token_empty_string_is_none(self, monkeypatch):
-        """Empty string treated as unset."""
-        monkeypatch.setenv("GITHUB_TOKEN", "")
-        monkeypatch.delenv("GH_TOKEN", raising=False)
-        assert _get_github_token() is None
-
-    def test_get_github_token_whitespace_is_none(self, monkeypatch):
-        """Whitespace-only treated as unset."""
-        monkeypatch.setenv("GITHUB_TOKEN", "   ")
         monkeypatch.delenv("GH_TOKEN", raising=False)
         assert _get_github_token() is None
 
@@ -68,205 +57,108 @@ class TestGitHubAuthentication:
         monkeypatch.setenv("GH_TOKEN", "fallback")
         assert _get_github_token() == "fallback"
 
-    @respx.mock
-    def test_token_sent_in_authorization_header(self, monkeypatch):
-        """Token is included in Authorization header when set."""
-        monkeypatch.setenv("GITHUB_TOKEN", "test_token")
-        monkeypatch.delenv("GH_TOKEN", raising=False)
 
-        route = respx.get(
-            "https://github.com/user/repo/archive/refs/heads/main.tar.gz"
-        ).mock(return_value=Response(404))
+class TestDownloadedRepoE2E:
+    """Tests for downloaded_repo context manager."""
 
+    def test_git_missing_raises(self, monkeypatch):
+        """Missing git raises AgrError."""
+        monkeypatch.setattr(shutil, "which", lambda _: None)
+        source = SourceConfig(
+            name="github",
+            type="git",
+            url="https://github.com/{owner}/{repo}.git",
+        )
+        with pytest.raises(AgrError, match="git CLI not found"):
+            with downloaded_repo(source, "user", "repo"):
+                pass
+
+    def test_git_clone_success(self, monkeypatch, tmp_path):
+        """Successful clone yields repo dir."""
+        monkeypatch.setattr(shutil, "which", lambda _: "/usr/bin/git")
+
+        def fake_run(cmd, capture_output, text, check):
+            repo_path = Path(cmd[-1])
+            repo_path.mkdir(parents=True, exist_ok=True)
+            return subprocess.CompletedProcess(cmd, 0, "", "")
+
+        monkeypatch.setattr(subprocess, "run", fake_run)
+
+        source = SourceConfig(
+            name="github",
+            type="git",
+            url="https://github.com/{owner}/{repo}.git",
+        )
+        with downloaded_repo(source, "user", "repo") as repo_dir:
+            assert repo_dir.exists()
+
+    def test_git_clone_falls_back_when_partial_unsupported(self, monkeypatch):
+        """Fallback to full clone when partial clone is unsupported."""
+        monkeypatch.setattr(shutil, "which", lambda _: "/usr/bin/git")
+        calls: list[list[str]] = []
+
+        def fake_run(cmd, capture_output, text, check):
+            calls.append(cmd)
+            repo_path = Path(cmd[-1])
+            if "--filter=blob:none" in cmd:
+                return subprocess.CompletedProcess(
+                    cmd, 1, "", "unknown option `--filter`"
+                )
+            repo_path.mkdir(parents=True, exist_ok=True)
+            return subprocess.CompletedProcess(cmd, 0, "", "")
+
+        monkeypatch.setattr(subprocess, "run", fake_run)
+
+        source = SourceConfig(
+            name="github",
+            type="git",
+            url="https://github.com/{owner}/{repo}.git",
+        )
+        with downloaded_repo(source, "user", "repo") as repo_dir:
+            assert repo_dir.exists()
+
+        assert len(calls) == 2
+        assert "--filter=blob:none" in calls[0]
+        assert "--filter=blob:none" not in calls[1]
+
+    def test_git_clone_not_found(self, monkeypatch):
+        """Repository not found errors are classified."""
+        monkeypatch.setattr(shutil, "which", lambda _: "/usr/bin/git")
+
+        def fake_run(cmd, capture_output, text, check):
+            return subprocess.CompletedProcess(
+                cmd, 1, "", "fatal: repository not found"
+            )
+
+        monkeypatch.setattr(subprocess, "run", fake_run)
+
+        source = SourceConfig(
+            name="github",
+            type="git",
+            url="https://github.com/{owner}/{repo}.git",
+        )
         with pytest.raises(RepoNotFoundError):
-            with downloaded_repo("user", "repo"):
+            with downloaded_repo(source, "user", "repo"):
                 pass
 
-        assert route.called
-        assert route.calls[0].request.headers["Authorization"] == "token test_token"
+    def test_git_clone_auth_failure(self, monkeypatch):
+        """Authentication failures are classified."""
+        monkeypatch.setattr(shutil, "which", lambda _: "/usr/bin/git")
 
-    @respx.mock
-    def test_no_auth_header_when_token_unset(self, monkeypatch):
-        """No Authorization header when token is not set."""
-        monkeypatch.delenv("GITHUB_TOKEN", raising=False)
-        monkeypatch.delenv("GH_TOKEN", raising=False)
+        def fake_run(cmd, capture_output, text, check):
+            return subprocess.CompletedProcess(
+                cmd, 1, "", "fatal: Authentication failed"
+            )
 
-        route = respx.get(
-            "https://github.com/user/repo/archive/refs/heads/main.tar.gz"
-        ).mock(return_value=Response(404))
+        monkeypatch.setattr(subprocess, "run", fake_run)
 
-        with pytest.raises(RepoNotFoundError):
-            with downloaded_repo("user", "repo"):
-                pass
-
-        assert route.called
-        assert "Authorization" not in route.calls[0].request.headers
-
-    @respx.mock
-    def test_401_without_token_suggests_setting_token(self, monkeypatch):
-        """401 without token suggests setting GITHUB_TOKEN."""
-        monkeypatch.delenv("GITHUB_TOKEN", raising=False)
-        monkeypatch.delenv("GH_TOKEN", raising=False)
-
-        respx.get("https://github.com/user/repo/archive/refs/heads/main.tar.gz").mock(
-            return_value=Response(401)
+        source = SourceConfig(
+            name="github",
+            type="git",
+            url="https://github.com/{owner}/{repo}.git",
         )
-
-        with pytest.raises(AuthenticationError, match="Set GITHUB_TOKEN"):
-            with downloaded_repo("user", "repo"):
-                pass
-
-    @respx.mock
-    def test_401_with_token_suggests_checking_token(self, monkeypatch):
-        """401 with token suggests checking validity."""
-        monkeypatch.setenv("GITHUB_TOKEN", "bad_token")
-        monkeypatch.delenv("GH_TOKEN", raising=False)
-
-        respx.get("https://github.com/user/repo/archive/refs/heads/main.tar.gz").mock(
-            return_value=Response(401)
-        )
-
-        with pytest.raises(AuthenticationError, match="is valid"):
-            with downloaded_repo("user", "repo"):
-                pass
-
-    @respx.mock
-    def test_403_with_token_raises_scope_error(self, monkeypatch):
-        """403 with token suggests checking scope."""
-        monkeypatch.setenv("GITHUB_TOKEN", "token_without_scope")
-        monkeypatch.delenv("GH_TOKEN", raising=False)
-
-        respx.get("https://github.com/user/repo/archive/refs/heads/main.tar.gz").mock(
-            return_value=Response(403)
-        )
-
-        with pytest.raises(AuthenticationError, match="repo.*scope"):
-            with downloaded_repo("user", "repo"):
-                pass
-
-    @respx.mock
-    def test_403_without_token_suggests_setting_token(self, monkeypatch):
-        """403 without token suggests setting GITHUB_TOKEN."""
-        monkeypatch.delenv("GITHUB_TOKEN", raising=False)
-        monkeypatch.delenv("GH_TOKEN", raising=False)
-
-        respx.get("https://github.com/user/repo/archive/refs/heads/main.tar.gz").mock(
-            return_value=Response(403)
-        )
-
-        with pytest.raises(AuthenticationError, match="Set GITHUB_TOKEN"):
-            with downloaded_repo("user", "repo"):
-                pass
-
-    @respx.mock
-    def test_429_raises_rate_limit_error(self, monkeypatch):
-        """429 response raises AgrError with rate limit message."""
-        monkeypatch.delenv("GITHUB_TOKEN", raising=False)
-        monkeypatch.delenv("GH_TOKEN", raising=False)
-
-        respx.get("https://github.com/user/repo/archive/refs/heads/main.tar.gz").mock(
-            return_value=Response(429)
-        )
-
-        with pytest.raises(AgrError, match="rate limit"):
-            with downloaded_repo("user", "repo"):
-                pass
-
-    @respx.mock
-    def test_error_message_does_not_contain_token(self, monkeypatch):
-        """Error messages must not contain the token value."""
-        secret_token = "ghp_SUPERSECRET123456"
-        monkeypatch.setenv("GITHUB_TOKEN", secret_token)
-        monkeypatch.delenv("GH_TOKEN", raising=False)
-
-        respx.get("https://github.com/user/repo/archive/refs/heads/main.tar.gz").mock(
-            return_value=Response(500)
-        )
-
-        with pytest.raises(AgrError) as exc_info:
-            with downloaded_repo("user", "repo"):
-                pass
-
-        assert secret_token not in str(exc_info.value)
-        # Verify exception chaining is suppressed (security)
-        assert exc_info.value.__cause__ is None
-
-    def test_get_github_token_strips_whitespace(self, monkeypatch):
-        """Token with surrounding whitespace is stripped."""
-        monkeypatch.setenv("GITHUB_TOKEN", "  ghp_test123  ")
-        monkeypatch.delenv("GH_TOKEN", raising=False)
-        assert _get_github_token() == "ghp_test123"
-
-    def test_get_github_token_github_whitespace_falls_back_to_gh(self, monkeypatch):
-        """Whitespace GITHUB_TOKEN falls back to valid GH_TOKEN."""
-        monkeypatch.setenv("GITHUB_TOKEN", "   ")
-        monkeypatch.setenv("GH_TOKEN", "fallback_token")
-        assert _get_github_token() == "fallback_token"
-
-    def test_get_github_token_both_whitespace_returns_none(self, monkeypatch):
-        """Both tokens whitespace-only returns None."""
-        monkeypatch.setenv("GITHUB_TOKEN", "   ")
-        monkeypatch.setenv("GH_TOKEN", "   ")
-        assert _get_github_token() is None
-
-    @respx.mock
-    def test_connect_error_raises_agr_error(self, monkeypatch):
-        """Connection errors wrapped in AgrError."""
-        import httpx
-
-        monkeypatch.delenv("GITHUB_TOKEN", raising=False)
-        monkeypatch.delenv("GH_TOKEN", raising=False)
-
-        respx.get("https://github.com/user/repo/archive/refs/heads/main.tar.gz").mock(
-            side_effect=httpx.ConnectError("Connection refused")
-        )
-
-        with pytest.raises(AgrError, match="Network error: ConnectError"):
-            with downloaded_repo("user", "repo"):
-                pass
-
-    @respx.mock
-    def test_timeout_error_raises_agr_error(self, monkeypatch):
-        """Timeout errors wrapped in AgrError."""
-        import httpx
-
-        monkeypatch.delenv("GITHUB_TOKEN", raising=False)
-        monkeypatch.delenv("GH_TOKEN", raising=False)
-
-        respx.get("https://github.com/user/repo/archive/refs/heads/main.tar.gz").mock(
-            side_effect=httpx.ReadTimeout("Read timed out")
-        )
-
-        with pytest.raises(AgrError, match="Network error: ReadTimeout"):
-            with downloaded_repo("user", "repo"):
-                pass
-
-    @respx.mock
-    def test_500_raises_agr_error_with_status_code(self, monkeypatch):
-        """500 response raises AgrError with status code in message."""
-        monkeypatch.delenv("GITHUB_TOKEN", raising=False)
-        monkeypatch.delenv("GH_TOKEN", raising=False)
-
-        respx.get("https://github.com/user/repo/archive/refs/heads/main.tar.gz").mock(
-            return_value=Response(500)
-        )
-
-        with pytest.raises(AgrError, match="HTTP 500"):
-            with downloaded_repo("user", "repo"):
-                pass
-
-    @respx.mock
-    def test_502_raises_agr_error_with_status_code(self, monkeypatch):
-        """502 response raises AgrError with status code in message."""
-        monkeypatch.delenv("GITHUB_TOKEN", raising=False)
-        monkeypatch.delenv("GH_TOKEN", raising=False)
-
-        respx.get("https://github.com/user/repo/archive/refs/heads/main.tar.gz").mock(
-            return_value=Response(502)
-        )
-
-        with pytest.raises(AgrError, match="HTTP 502"):
-            with downloaded_repo("user", "repo"):
+        with pytest.raises(AuthenticationError):
+            with downloaded_repo(source, "user", "repo"):
                 pass
 
 
@@ -412,13 +304,19 @@ class TestMetadataMatching:
         handle = ParsedHandle(username="alpha", name="test-skill")
 
         installed = install_skill_from_repo(
-            repo_dir, "test-skill", handle, skills_dir, CLAUDE, repo_root
+            repo_dir,
+            "test-skill",
+            handle,
+            skills_dir,
+            CLAUDE,
+            repo_root,
+            install_source="github",
         )
 
         meta = read_skill_metadata(installed)
         assert meta is not None
-        assert meta["id"] == build_handle_id(handle, repo_root)
-        assert is_skill_installed(handle, repo_root, CLAUDE)
+        assert meta["id"] == build_handle_id(handle, repo_root, "github")
+        assert is_skill_installed(handle, repo_root, CLAUDE, "github")
 
     def test_flat_collision_uses_full_name_and_metadata(self, tmp_path):
         """Second handle with same name installs to full handle name."""
@@ -430,7 +328,13 @@ class TestMetadataMatching:
         repo_a = self._create_repo_with_skill(tmp_path, "test-skill", "a")
         handle_a = ParsedHandle(username="alpha", name="test-skill")
         install_skill_from_repo(
-            repo_a, "test-skill", handle_a, skills_dir, CLAUDE, repo_root
+            repo_a,
+            "test-skill",
+            handle_a,
+            skills_dir,
+            CLAUDE,
+            repo_root,
+            install_source="github",
         )
 
         handle_b = ParsedHandle(username="bravo", name="test-skill")
@@ -438,7 +342,13 @@ class TestMetadataMatching:
 
         repo_b = self._create_repo_with_skill(tmp_path, "test-skill", "b")
         installed_b = install_skill_from_repo(
-            repo_b, "test-skill", handle_b, skills_dir, CLAUDE, repo_root
+            repo_b,
+            "test-skill",
+            handle_b,
+            skills_dir,
+            CLAUDE,
+            repo_root,
+            install_source="github",
         )
 
         assert installed_b.name == handle_b.to_installed_name()
@@ -447,9 +357,9 @@ class TestMetadataMatching:
 
         meta_b = read_skill_metadata(installed_b)
         assert meta_b is not None
-        assert meta_b["id"] == build_handle_id(handle_b, repo_root)
+        assert meta_b["id"] == build_handle_id(handle_b, repo_root, "github")
 
-        assert uninstall_skill(handle_b, repo_root, CLAUDE) is True
+        assert uninstall_skill(handle_b, repo_root, CLAUDE, "github") is True
         assert not (skills_dir / handle_b.to_installed_name()).exists()
         assert (skills_dir / "test-skill").exists()
 
@@ -520,22 +430,42 @@ class TestDownloadedRepo:
     def test_download_existing_repo(self):
         """Download a real repository."""
         from agr.fetcher import downloaded_repo
+        from agr.source import SourceConfig
+        import subprocess
 
-        with downloaded_repo("kasperjunge", "agent-resources") as repo_dir:
+        source = SourceConfig(
+            name="github",
+            type="git",
+            url="https://github.com/{owner}/{repo}.git",
+        )
+        with downloaded_repo(source, "kasperjunge", "agent-resources") as repo_dir:
             assert repo_dir.exists()
-            # Should have agr.toml or pyproject.toml
-            assert (repo_dir / "pyproject.toml").exists() or (
-                repo_dir / "agr.toml"
-            ).exists()
+            result = subprocess.run(
+                ["git", "-C", str(repo_dir), "ls-tree", "-r", "--name-only", "HEAD"],
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            assert result.returncode == 0
+            files = set(result.stdout.splitlines())
+            assert "pyproject.toml" in files or "agr.toml" in files
 
     @pytest.mark.e2e
     def test_download_nonexistent_raises(self):
         """Downloading nonexistent repo raises."""
         from agr.exceptions import RepoNotFoundError
         from agr.fetcher import downloaded_repo
+        from agr.source import SourceConfig
 
+        source = SourceConfig(
+            name="github",
+            type="git",
+            url="https://github.com/{owner}/{repo}.git",
+        )
         with pytest.raises(RepoNotFoundError):
-            with downloaded_repo("nonexistent-user-12345", "nonexistent-repo-67890"):
+            with downloaded_repo(
+                source, "nonexistent-user-12345", "nonexistent-repo-67890"
+            ):
                 pass
 
 

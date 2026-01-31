@@ -83,10 +83,10 @@ class ParsedHandle:
         return f"{self.username}{sep}{self.name}"
 
     def get_github_repo(self) -> tuple[str, str]:
-        """Get (username, repo_name) for GitHub download.
+        """Get (owner, repo_name) for git download.
 
         Returns:
-            Tuple of (username, repo_name). repo_name defaults to "agent-resources".
+            Tuple of (owner, repo_name). repo_name defaults to "agent-resources".
 
         Raises:
             InvalidHandleError: If this is a local handle.

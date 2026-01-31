@@ -45,10 +45,17 @@ The `-i` flag runs the skill first, then starts an interactive session so you ca
 Dependencies are tracked in `agr.toml`:
 
 ```toml
+default_source = "github"
+
 dependencies = [
     {handle = "anthropics/skills/frontend-design"},
     {handle = "anthropics/skills/skill-creator"},
 ]
+
+[[source]]
+name = "github"
+type = "git"
+url = "https://github.com/{owner}/{repo}.git"
 ```
 
 Teammates install everything with:

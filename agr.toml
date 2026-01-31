@@ -1,3 +1,4 @@
+default_source = "github"
 tools = ["claude", "cursor", "copilot", "codex"]
 dependencies = [
     {handle = "maragudk/skills/bluesky", type = "skill"},
@@ -15,3 +16,8 @@ dependencies = [
     {path = "./skills/make-research", type = "skill"},
     {handle = "anthropics/skills/canvas-design", type = "skill"},
 ]
+
+[[source]]
+name = "github"
+type = "git"
+url = "https://github.com/{owner}/{repo}.git"

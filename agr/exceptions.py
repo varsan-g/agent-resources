@@ -6,11 +6,11 @@ class AgrError(Exception):
 
 
 class RepoNotFoundError(AgrError):
-    """Raised when the GitHub repo doesn't exist."""
+    """Raised when the remote repo doesn't exist."""
 
 
 class AuthenticationError(AgrError):
-    """Raised when GitHub authentication fails (401/403)."""
+    """Raised when authentication fails for a remote repo."""
 
 
 class SkillNotFoundError(AgrError):

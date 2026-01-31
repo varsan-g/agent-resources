@@ -17,6 +17,7 @@ def _get_installation_status(
     handle: ParsedHandle,
     repo_root: Path,
     tools: list[ToolConfig],
+    source: str | None = None,
 ) -> str:
     """Get installation status across all configured tools.
 
@@ -29,7 +30,9 @@ def _get_installation_status(
         Formatted status string
     """
     installed_tools = [
-        tool.name for tool in tools if is_skill_installed(handle, repo_root, tool)
+        tool.name
+        for tool in tools
+        if is_skill_installed(handle, repo_root, tool, source)
     ]
 
     if len(installed_tools) == len(tools):
@@ -86,7 +89,10 @@ def run_list() -> None:
         # Check installation status
         try:
             handle = parse_handle(identifier)
-            status = _get_installation_status(handle, repo_root, tools)
+            source_name = (
+                None if dep.is_local else (dep.source or config.default_source)
+            )
+            status = _get_installation_status(handle, repo_root, tools, source_name)
         except Exception:
             status = "[red]invalid[/red]"
 

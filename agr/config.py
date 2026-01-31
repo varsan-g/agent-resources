@@ -8,6 +8,12 @@ from tomlkit import TOMLDocument
 from tomlkit.exceptions import TOMLKitError
 
 from agr.exceptions import ConfigError
+from agr.source import (
+    DEFAULT_SOURCE_NAME,
+    SourceConfig,
+    SourceResolver,
+    default_sources,
+)
 from agr.tool import DEFAULT_TOOL_NAMES, TOOLS, ToolConfig, get_tool
 
 
@@ -21,8 +27,9 @@ class Dependency:
     """
 
     type: str  # Always "skill" for now
-    handle: str | None = None  # Remote GitHub reference
+    handle: str | None = None  # Remote Git reference
     path: str | None = None  # Local path
+    source: str | None = None  # Optional source name for remote handles
 
     def __post_init__(self) -> None:
         """Validate dependency has exactly one source."""
@@ -30,6 +37,8 @@ class Dependency:
             raise ValueError("Dependency cannot have both handle and path")
         if not self.handle and not self.path:
             raise ValueError("Dependency must have either handle or path")
+        if self.path and self.source:
+            raise ValueError("Local dependency cannot specify a source")
 
     @property
     def is_local(self) -> bool:
@@ -52,6 +61,13 @@ class AgrConfig:
     """Configuration loaded from agr.toml.
 
     Format:
+        default_source = "github"
+
+        [[source]]
+        name = "github"
+        type = "git"
+        url = "https://github.com/{owner}/{repo}.git"
+
         tools = ["claude", "cursor"]  # Optional, defaults to ["claude"]
         dependencies = [
             { handle = "kasperjunge/commit", type = "skill" },
@@ -61,6 +77,8 @@ class AgrConfig:
 
     dependencies: list[Dependency] = field(default_factory=list)
     tools: list[str] = field(default_factory=lambda: list(DEFAULT_TOOL_NAMES))
+    sources: list[SourceConfig] = field(default_factory=default_sources)
+    default_source: str = DEFAULT_SOURCE_NAME
     _path: Path | None = field(default=None, repr=False)
 
     def get_tools(self) -> list[ToolConfig]:
@@ -73,6 +91,10 @@ class AgrConfig:
             AgrError: If any tool name is not recognized
         """
         return [get_tool(t) for t in self.tools]
+
+    def get_source_resolver(self) -> SourceResolver:
+        """Get a SourceResolver for this config."""
+        return SourceResolver(self.sources, self.default_source)
 
     @classmethod
     def load(cls, path: Path) -> "AgrConfig":
@@ -116,19 +138,79 @@ class AgrConfig:
                     f"Unknown tool '{tool_name}' in agr.toml. Available: {available}"
                 )
 
-        # Parse dependencies list
+        # Parse sources list
+        sources_list = doc.get("source")
+        sources: list[SourceConfig] = []
+        if sources_list is None:
+            sources = default_sources()
+        else:
+            if not isinstance(sources_list, list):
+                raise ConfigError("Invalid [[source]] format in agr.toml")
+            for item in sources_list:
+                if not isinstance(item, dict):
+                    raise ConfigError("Invalid [[source]] entry in agr.toml")
+                name = str(item.get("name", "")).strip()
+                source_type = str(item.get("type", "git")).strip()
+                url = item.get("url")
+                if not name:
+                    raise ConfigError("Source entry missing name")
+                if source_type != "git":
+                    raise ConfigError(
+                        f"Unsupported source type '{source_type}' for '{name}'"
+                    )
+                if not url:
+                    raise ConfigError(f"Source '{name}' missing url")
+                sources.append(SourceConfig(name=name, type=source_type, url=str(url)))
+
+        default_source = doc.get("default_source")
+        if default_source:
+            default_source = str(default_source)
+        elif sources:
+            default_source = sources[0].name
+        else:
+            default_source = DEFAULT_SOURCE_NAME
+
+        if not any(source.name == default_source for source in sources):
+            raise ConfigError(
+                f"default_source '{default_source}' not found in [[source]] list"
+            )
+
+        config.sources = sources
+        config.default_source = default_source
+
+        # Parse dependencies list (must appear before [[source]] in TOML)
         deps_list = doc.get("dependencies", [])
+        if "dependencies" not in doc and sources_list:
+            for item in sources_list:
+                if isinstance(item, dict) and "dependencies" in item:
+                    raise ConfigError(
+                        "dependencies must be declared before [[source]] blocks"
+                    )
         for item in deps_list:
             if not isinstance(item, dict):
                 continue
             dep_type = item.get("type", "skill")
             handle = item.get("handle")
             path_val = item.get("path")
+            source = item.get("source")
+            if source is not None:
+                source = str(source)
 
             if handle:
-                config.dependencies.append(Dependency(handle=handle, type=dep_type))
+                config.dependencies.append(
+                    Dependency(handle=handle, type=dep_type, source=source)
+                )
             elif path_val:
+                if source is not None:
+                    raise ConfigError("Local dependencies cannot specify a source")
                 config.dependencies.append(Dependency(path=path_val, type=dep_type))
+
+        source_names = {source.name for source in sources}
+        for dep in config.dependencies:
+            if dep.source and dep.source not in source_names:
+                raise ConfigError(
+                    f"Unknown source '{dep.source}' in dependency '{dep.identifier}'"
+                )
 
         return config
 
@@ -147,6 +229,15 @@ class AgrConfig:
 
         doc: TOMLDocument = tomlkit.document()
 
+        # Always write default source and sources for clarity
+        default_source = self.default_source or DEFAULT_SOURCE_NAME
+        sources = self.sources or default_sources()
+        if not any(source.name == default_source for source in sources):
+            raise ValueError(
+                f"default_source '{default_source}' not found in sources list"
+            )
+        doc["default_source"] = default_source
+
         # Save tools array if not default
         if self.tools != DEFAULT_TOOL_NAMES:
             tools_array = tomlkit.array()
@@ -164,10 +255,20 @@ class AgrConfig:
                 item["handle"] = dep.handle
             if dep.path:
                 item["path"] = dep.path
+            if dep.source:
+                item["source"] = dep.source
             item["type"] = dep.type
             deps_array.append(item)
 
         doc["dependencies"] = deps_array
+        sources_array = tomlkit.aot()
+        for source in sources:
+            table = tomlkit.table()
+            table["name"] = source.name
+            table["type"] = source.type
+            table["url"] = source.url
+            sources_array.append(table)
+        doc["source"] = sources_array
         save_path.write_text(tomlkit.dumps(doc))
         self._path = save_path
 

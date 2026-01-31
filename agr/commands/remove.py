@@ -40,10 +40,20 @@ def run_remove(refs: list[str]) -> None:
             # Parse handle
             handle = parse_handle(ref)
 
+            dep = config.get_by_identifier(ref)
+            if dep is None and handle.is_local:
+                dep = config.get_by_identifier(str(handle.local_path))
+            if dep is None and not handle.is_local:
+                dep = config.get_by_identifier(handle.to_toml_handle())
+
+            source_name = None
+            if dep and dep.is_remote:
+                source_name = dep.source or config.default_source
+
             # Remove from filesystem for all configured tools
             removed_fs = False
             for tool in tools:
-                if uninstall_skill(handle, repo_root, tool):
+                if uninstall_skill(handle, repo_root, tool, source_name):
                     removed_fs = True
 
             # Remove from config

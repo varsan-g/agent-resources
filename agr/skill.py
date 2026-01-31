@@ -2,7 +2,7 @@
 
 import re
 from enum import Enum
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 
 class ResourceType(Enum):
@@ -93,6 +93,38 @@ def find_skill_in_repo(repo_dir: Path, skill_name: str) -> Path | None:
         return None
 
     # Return shallowest match for deterministic behavior
+    return min(matches, key=lambda p: len(p.parts))
+
+
+def find_skill_in_repo_listing(
+    paths: list[str], skill_name: str
+) -> PurePosixPath | None:
+    """Find a skill directory from a git file listing.
+
+    Args:
+        paths: List of file paths from git (posix-style).
+        skill_name: Name of the skill to find.
+
+    Returns:
+        Path to skill directory (posix-style, relative), or None if not found.
+    """
+    matches: list[PurePosixPath] = []
+
+    for rel in paths:
+        rel_path = PurePosixPath(rel)
+        if rel_path.name != SKILL_MARKER:
+            continue
+        if len(rel_path.parts) == 1:
+            # Root-level SKILL.md is not a skill directory
+            continue
+        if any(part in EXCLUDED_DIRS for part in rel_path.parts):
+            continue
+        if rel_path.parent.name == skill_name:
+            matches.append(rel_path.parent)
+
+    if not matches:
+        return None
+
     return min(matches, key=lambda p: len(p.parts))
 
 

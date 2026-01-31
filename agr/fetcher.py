@@ -3,13 +3,12 @@
 import logging
 import os
 import shutil
-import tarfile
+import subprocess
 import tempfile
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Generator
-
-import httpx
+from urllib.parse import quote, urlparse, urlunparse
 
 from agr.exceptions import (
     AgrError,
@@ -22,22 +21,29 @@ from agr.metadata import build_handle_id, read_skill_metadata, write_skill_metad
 from agr.skill import (
     SKILL_MARKER,
     find_skill_in_repo,
+    find_skill_in_repo_listing,
     is_valid_skill_dir,
     update_skill_md_name,
+)
+from agr.source import (
+    DEFAULT_SOURCE_NAME,
+    SourceConfig,
+    SourceResolver,
+    default_sources,
 )
 from agr.tool import DEFAULT_TOOL, ToolConfig
 
 logger = logging.getLogger(__name__)
 
 
-def _skill_dir_matches_handle(skill_dir: Path, handle_id: str | None) -> bool:
+def _skill_dir_matches_handle(skill_dir: Path, handle_ids: list[str] | None) -> bool:
     """Check whether a skill directory matches a handle via metadata."""
-    if not handle_id:
+    if not handle_ids:
         return False
     meta = read_skill_metadata(skill_dir)
     if not meta:
         return False
-    return meta.get("id") == handle_id
+    return meta.get("id") in handle_ids
 
 
 def _find_local_name_conflicts(
@@ -84,22 +90,23 @@ def _find_existing_skill_dir(
     skills_dir: Path,
     tool: ToolConfig,
     repo_root: Path | None,
+    source: str | None = None,
 ) -> Path | None:
     """Find an existing installed skill directory for this handle."""
     if tool.supports_nested:
         skill_path = skills_dir / handle.to_skill_path(tool)
         return skill_path if is_valid_skill_dir(skill_path) else None
 
-    handle_id = build_handle_id(handle, repo_root)
+    handle_ids = _build_handle_ids(handle, repo_root, source)
     name_path = skills_dir / handle.name
     full_path = skills_dir / handle.to_installed_name()
 
     if is_valid_skill_dir(name_path) and _skill_dir_matches_handle(
-        name_path, handle_id
+        name_path, handle_ids
     ):
         return name_path
     if is_valid_skill_dir(full_path) and _skill_dir_matches_handle(
-        full_path, handle_id
+        full_path, handle_ids
     ):
         return full_path
 
@@ -115,12 +122,13 @@ def _resolve_skill_destination(
     skills_dir: Path,
     tool: ToolConfig,
     repo_root: Path | None,
+    source: str | None = None,
 ) -> Path:
     """Resolve the destination path for installing a skill."""
     if tool.supports_nested:
         return skills_dir / handle.to_skill_path(tool)
 
-    existing = _find_existing_skill_dir(handle, skills_dir, tool, repo_root)
+    existing = _find_existing_skill_dir(handle, skills_dir, tool, repo_root, source)
     if existing:
         return existing
 
@@ -147,94 +155,224 @@ def _get_github_token() -> str | None:
 
 
 @contextmanager
-def downloaded_repo(username: str, repo_name: str) -> Generator[Path, None, None]:
-    """Download a GitHub repo tarball and yield the extracted directory.
+def downloaded_repo(
+    source: SourceConfig, owner: str, repo_name: str
+) -> Generator[Path, None, None]:
+    """Download a git repo and yield the extracted directory.
 
     Args:
-        username: GitHub username
+        source: Source configuration
+        owner: Repo owner/username
         repo_name: Repository name
 
     Yields:
-        Path to extracted repository directory
+        Path to cloned repository directory
 
     Raises:
         RepoNotFoundError: If the repository doesn't exist
         AuthenticationError: If authentication fails (private repo without valid token)
-        AgrError: If download or extraction fails
+        AgrError: If download fails
     """
-    tarball_url = (
-        f"https://github.com/{username}/{repo_name}/archive/refs/heads/main.tar.gz"
-    )
+    if shutil.which("git") is None:
+        raise AgrError("git CLI not found. Install git to fetch remote skills.")
+
+    repo_url = source.build_repo_url(owner, repo_name)
+    repo_url = _apply_github_token(repo_url)
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         tmp_path = Path(tmp_dir)
-        tarball_path = tmp_path / "repo.tar.gz"
+        repo_dir = tmp_path / "repo"
 
-        # Download tarball
-        try:
-            # Build headers with optional auth
-            headers = {}
-            token = _get_github_token()
-            if token:
-                headers["Authorization"] = f"token {token}"
+        result = _clone_repo(repo_url, repo_dir, partial=True)
+        if result.returncode != 0 and _partial_clone_unsupported(result.stderr):
+            _reset_repo_dir(repo_dir)
+            result = _clone_repo(repo_url, repo_dir, partial=False)
 
-            with httpx.Client(follow_redirects=True, timeout=30.0) as client:
-                response = client.get(tarball_url, headers=headers)
-                if response.status_code == 401:
-                    if token:
-                        raise AuthenticationError(
-                            "Authentication failed. Check that GITHUB_TOKEN is valid."
-                        )
-                    else:
-                        raise AuthenticationError(
-                            "Authentication required. Set GITHUB_TOKEN to access this repository."
-                        )
-                if response.status_code == 403:
-                    if token:
-                        raise AuthenticationError(
-                            "Access denied. Check that GITHUB_TOKEN has 'repo' scope "
-                            "for private repositories."
-                        )
-                    else:
-                        raise AuthenticationError(
-                            "Access denied. Set GITHUB_TOKEN to access private repositories."
-                        )
-                if response.status_code == 404:
-                    raise RepoNotFoundError(
-                        f"Repository '{username}/{repo_name}' not found on GitHub"
-                    )
-                if response.status_code == 429:
-                    raise AgrError(
-                        "GitHub rate limit exceeded. Set GITHUB_TOKEN for higher limits "
-                        "or wait before retrying."
-                    )
-                response.raise_for_status()
-                tarball_path.write_bytes(response.content)
-        except httpx.HTTPStatusError:
-            # Don't include the original exception - it may contain auth headers
-            raise AgrError(
-                f"Failed to download repository '{username}/{repo_name}': "
-                f"HTTP {response.status_code}"
-            ) from None
-        except httpx.RequestError as e:
-            raise AgrError(f"Network error: {type(e).__name__}") from None
-
-        # Extract tarball
-        extract_path = tmp_path / "extracted"
-        with tarfile.open(tarball_path, "r:gz") as tar:
-            tar.extractall(extract_path, filter="data")
-
-        # GitHub tarballs extract to {repo}-{branch}/
-        repo_dir = extract_path / f"{repo_name}-main"
-        if not repo_dir.exists():
-            # Try finding the extracted directory
-            dirs = list(extract_path.iterdir())
-            if dirs:
-                repo_dir = dirs[0]
-            else:
-                raise AgrError("Failed to extract repository")
+        if result.returncode != 0:
+            _raise_clone_error(result.stderr, owner, repo_name, source)
 
         yield repo_dir
+
+
+def _apply_github_token(repo_url: str) -> str:
+    """Inject GitHub token into HTTPS URL if available."""
+    token = _get_github_token()
+    if not token:
+        return repo_url
+    parsed = urlparse(repo_url)
+    if parsed.scheme != "https":
+        return repo_url
+    if not parsed.netloc.endswith("github.com"):
+        return repo_url
+    if "@" in parsed.netloc:
+        return repo_url
+    encoded = quote(token, safe="")
+    netloc = f"{encoded}:x-oauth-basic@{parsed.netloc}"
+    return urlunparse(
+        (
+            parsed.scheme,
+            netloc,
+            parsed.path,
+            parsed.params,
+            parsed.query,
+            parsed.fragment,
+        )
+    )
+
+
+def _clone_repo(
+    repo_url: str, repo_dir: Path, partial: bool
+) -> subprocess.CompletedProcess:
+    """Clone a repository using git, optionally with partial clone flags."""
+    cmd = [
+        "git",
+        "clone",
+        "--depth",
+        "1",
+        "--branch",
+        "main",
+        "--single-branch",
+    ]
+    if partial:
+        cmd.extend(["--filter=blob:none", "--no-checkout"])
+    cmd.extend([repo_url, str(repo_dir)])
+    try:
+        return subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+    except OSError as e:
+        raise AgrError(f"Failed to run git: {type(e).__name__}") from None
+
+
+def _partial_clone_unsupported(stderr: str | None) -> bool:
+    """Detect errors indicating partial clone is unsupported."""
+    if not stderr:
+        return False
+    lowered = stderr.lower()
+    return (
+        ("unknown option" in lowered and "--filter" in lowered)
+        or "filtering is not supported" in lowered
+        or "does not support filtering" in lowered
+        or "filtering not recognized" in lowered
+    )
+
+
+def _reset_repo_dir(repo_dir: Path) -> None:
+    """Remove a partially created repo directory."""
+    if repo_dir.exists():
+        shutil.rmtree(repo_dir, ignore_errors=True)
+
+
+def _raise_clone_error(
+    stderr: str | None, owner: str, repo_name: str, source: SourceConfig
+) -> None:
+    """Raise a friendly error based on git clone output."""
+    message = (stderr or "").strip()
+    lowered = message.lower()
+
+    if "authentication failed" in lowered or "permission denied" in lowered:
+        raise AuthenticationError(
+            f"Authentication failed for source '{source.name}'."
+        ) from None
+    if (
+        "repository not found" in lowered
+        or ("not found" in lowered and "repository" in lowered)
+        or "does not exist" in lowered
+    ):
+        raise RepoNotFoundError(
+            f"Repository '{owner}/{repo_name}' not found in source '{source.name}'."
+        ) from None
+    if "could not resolve host" in lowered:
+        raise AgrError(
+            f"Network error: could not resolve host for source '{source.name}'."
+        ) from None
+
+    raise AgrError(f"Failed to clone repository from source '{source.name}'.") from None
+
+
+def _git_list_files(repo_dir: Path) -> list[str]:
+    """List files in the repo without checking out blobs."""
+    result = subprocess.run(
+        ["git", "-C", str(repo_dir), "ls-tree", "-r", "--name-only", "HEAD"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if result.returncode != 0:
+        raise AgrError("Failed to list repository files.")
+    return [line for line in result.stdout.splitlines() if line.strip()]
+
+
+def _checkout_sparse(repo_dir: Path, rel_path: Path) -> None:
+    """Checkout only the given path using sparse checkout."""
+    init = subprocess.run(
+        ["git", "-C", str(repo_dir), "sparse-checkout", "init", "--cone"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if init.returncode != 0:
+        raise AgrError("Failed to initialize sparse checkout.")
+    set_cmd = subprocess.run(
+        ["git", "-C", str(repo_dir), "sparse-checkout", "set", rel_path.as_posix()],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if set_cmd.returncode != 0:
+        raise AgrError("Failed to set sparse checkout path.")
+    checkout = subprocess.run(
+        ["git", "-C", str(repo_dir), "checkout", "-f", "main"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if checkout.returncode != 0:
+        raise AgrError("Failed to checkout repository.")
+
+
+def _prepare_repo_for_skill(repo_dir: Path, skill_name: str) -> Path | None:
+    """Prepare a repo so that only the skill path is checked out."""
+    try:
+        paths = _git_list_files(repo_dir)
+        skill_rel = find_skill_in_repo_listing(paths, skill_name)
+        if skill_rel is None:
+            return None
+        _checkout_sparse(repo_dir, Path(skill_rel))
+        skill_path = repo_dir / skill_rel
+        if not skill_path.exists():
+            raise AgrError("Failed to checkout skill path.")
+        return skill_path
+    except AgrError:
+        # Fallback: full checkout + scan
+        result = subprocess.run(
+            ["git", "-C", str(repo_dir), "checkout", "-f", "main"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if result.returncode != 0:
+            raise
+        return find_skill_in_repo(repo_dir, skill_name)
+
+
+def _build_handle_ids(
+    handle: ParsedHandle,
+    repo_root: Path | None,
+    source: str | None,
+) -> list[str] | None:
+    """Build handle IDs to match, including legacy ids."""
+    if handle.is_local:
+        return [build_handle_id(handle, repo_root)]
+    handle_ids = [build_handle_id(handle, repo_root, source)]
+    if source is None:
+        handle_ids.append(build_handle_id(handle, repo_root, DEFAULT_SOURCE_NAME))
+    if source == DEFAULT_SOURCE_NAME:
+        handle_ids.append(build_handle_id(handle, repo_root))
+    return handle_ids
 
 
 def _copy_skill_to_destination(
@@ -244,6 +382,7 @@ def _copy_skill_to_destination(
     tool: ToolConfig,
     overwrite: bool,
     repo_root: Path | None,
+    install_source: str | None = None,
 ) -> Path:
     """Copy skill source to destination with overwrite handling.
 
@@ -273,7 +412,7 @@ def _copy_skill_to_destination(
     shutil.copytree(source, dest)
 
     update_skill_md_name(dest, dest.name)
-    write_skill_metadata(dest, handle, repo_root, tool.name, dest.name)
+    write_skill_metadata(dest, handle, repo_root, tool.name, dest.name, install_source)
 
     return dest
 
@@ -286,6 +425,8 @@ def install_skill_from_repo(
     tool: ToolConfig,
     repo_root: Path | None,
     overwrite: bool = False,
+    install_source: str | None = None,
+    skill_source: Path | None = None,
 ) -> Path:
     """Install a skill from a downloaded repository.
 
@@ -306,7 +447,8 @@ def install_skill_from_repo(
         FileExistsError: If skill exists and not overwriting
     """
     # Find the skill in the repo
-    skill_source = find_skill_in_repo(repo_dir, skill_name)
+    if skill_source is None:
+        skill_source = find_skill_in_repo(repo_dir, skill_name)
     if skill_source is None:
         raise SkillNotFoundError(
             f"Skill '{skill_name}' not found in repository.\n"
@@ -314,10 +456,12 @@ def install_skill_from_repo(
             f"Hint: Create a skill at 'skills/{skill_name}/SKILL.md' or '{skill_name}/SKILL.md'"
         )
 
-    skill_dest = _resolve_skill_destination(handle, dest_dir, tool, repo_root)
+    skill_dest = _resolve_skill_destination(
+        handle, dest_dir, tool, repo_root, install_source
+    )
 
     return _copy_skill_to_destination(
-        skill_source, skill_dest, handle, tool, overwrite, repo_root
+        skill_source, skill_dest, handle, tool, overwrite, repo_root, install_source
     )
 
 
@@ -395,6 +539,8 @@ def fetch_and_install(
     repo_root: Path,
     tool: ToolConfig = DEFAULT_TOOL,
     overwrite: bool = False,
+    resolver: SourceResolver | None = None,
+    source: str | None = None,
 ) -> Path:
     """Fetch and install a skill.
 
@@ -426,12 +572,35 @@ def fetch_and_install(
         )
 
     # Remote skill installation
-    username, repo_name = handle.get_github_repo()
+    resolver = resolver or SourceResolver(default_sources(), DEFAULT_SOURCE_NAME)
+    owner, repo_name = handle.get_github_repo()
 
-    with downloaded_repo(username, repo_name) as repo_dir:
-        return install_skill_from_repo(
-            repo_dir, handle.name, handle, skills_dir, tool, repo_root, overwrite
-        )
+    for source_config in resolver.ordered(source):
+        try:
+            with downloaded_repo(source_config, owner, repo_name) as repo_dir:
+                skill_source = _prepare_repo_for_skill(repo_dir, handle.name)
+                if skill_source is None:
+                    continue
+                return install_skill_from_repo(
+                    repo_dir,
+                    handle.name,
+                    handle,
+                    skills_dir,
+                    tool,
+                    repo_root,
+                    overwrite,
+                    install_source=source_config.name,
+                    skill_source=skill_source,
+                )
+        except RepoNotFoundError:
+            if source is not None:
+                raise
+            continue
+
+    raise SkillNotFoundError(
+        f"Skill '{handle.name}' not found in sources: "
+        f"{', '.join(s.name for s in resolver.ordered(source))}"
+    )
 
 
 def fetch_and_install_to_tools(
@@ -439,6 +608,8 @@ def fetch_and_install_to_tools(
     repo_root: Path,
     tools: list[ToolConfig],
     overwrite: bool = False,
+    resolver: SourceResolver | None = None,
+    source: str | None = None,
 ) -> dict[str, Path]:
     """Fetch skill once and install to multiple tools.
 
@@ -478,7 +649,7 @@ def fetch_and_install_to_tools(
         for tool in tools:
             try:
                 installed[tool.name] = fetch_and_install(
-                    handle, repo_root, tool, overwrite
+                    handle, repo_root, tool, overwrite, resolver, source
                 )
             except Exception:
                 _rollback()
@@ -486,31 +657,52 @@ def fetch_and_install_to_tools(
         return installed
 
     # Remote: download once, install to all
-    username, repo_name = handle.get_github_repo()
+    resolver = resolver or SourceResolver(default_sources(), DEFAULT_SOURCE_NAME)
+    owner, repo_name = handle.get_github_repo()
 
-    with downloaded_repo(username, repo_name) as repo_dir:
-        for tool in tools:
-            try:
-                skills_dir = tool.get_skills_dir(repo_root)
-                path = install_skill_from_repo(
-                    repo_dir,
-                    handle.name,
-                    handle,
-                    skills_dir,
-                    tool,
-                    repo_root,
-                    overwrite,
-                )
-                installed[tool.name] = path
-            except Exception:
-                _rollback()
+    for source_config in resolver.ordered(source):
+        try:
+            with downloaded_repo(source_config, owner, repo_name) as repo_dir:
+                skill_source = _prepare_repo_for_skill(repo_dir, handle.name)
+                if skill_source is None:
+                    continue
+                for tool in tools:
+                    try:
+                        skills_dir = tool.get_skills_dir(repo_root)
+                        path = install_skill_from_repo(
+                            repo_dir,
+                            handle.name,
+                            handle,
+                            skills_dir,
+                            tool,
+                            repo_root,
+                            overwrite,
+                            install_source=source_config.name,
+                            skill_source=skill_source,
+                        )
+                        installed[tool.name] = path
+                    except Exception:
+                        _rollback()
+                        raise
+                return installed
+        except RepoNotFoundError:
+            if source is not None:
                 raise
+            continue
+
+    raise SkillNotFoundError(
+        f"Skill '{handle.name}' not found in sources: "
+        f"{', '.join(s.name for s in resolver.ordered(source))}"
+    )
 
     return installed
 
 
 def uninstall_skill(
-    handle: ParsedHandle, repo_root: Path, tool: ToolConfig = DEFAULT_TOOL
+    handle: ParsedHandle,
+    repo_root: Path,
+    tool: ToolConfig = DEFAULT_TOOL,
+    source: str | None = None,
 ) -> bool:
     """Uninstall a skill.
 
@@ -523,7 +715,7 @@ def uninstall_skill(
         True if removed, False if not found
     """
     skills_dir = tool.get_skills_dir(repo_root)
-    skill_path = _find_existing_skill_dir(handle, skills_dir, tool, repo_root)
+    skill_path = _find_existing_skill_dir(handle, skills_dir, tool, repo_root, source)
 
     if not skill_path:
         return False
@@ -598,7 +790,10 @@ def get_installed_skills(repo_root: Path, tool: ToolConfig = DEFAULT_TOOL) -> li
 
 
 def is_skill_installed(
-    handle: ParsedHandle, repo_root: Path, tool: ToolConfig = DEFAULT_TOOL
+    handle: ParsedHandle,
+    repo_root: Path,
+    tool: ToolConfig = DEFAULT_TOOL,
+    source: str | None = None,
 ) -> bool:
     """Check if a skill is installed.
 
@@ -611,5 +806,5 @@ def is_skill_installed(
         True if installed
     """
     skills_dir = tool.get_skills_dir(repo_root)
-    skill_path = _find_existing_skill_dir(handle, skills_dir, tool, repo_root)
+    skill_path = _find_existing_skill_dir(handle, skills_dir, tool, repo_root, source)
     return bool(skill_path and is_valid_skill_dir(skill_path))

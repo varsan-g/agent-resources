@@ -11,9 +11,15 @@ import typer
 from rich.console import Console
 
 from agr.config import AgrConfig, find_config, find_repo_root
-from agr.exceptions import AgrError, InvalidHandleError
+from agr.exceptions import (
+    AgrError,
+    InvalidHandleError,
+    RepoNotFoundError,
+    SkillNotFoundError,
+)
 from agr.fetcher import downloaded_repo, install_skill_from_repo
 from agr.handle import ParsedHandle, parse_handle
+from agr.skill import find_skill_in_repo
 from agr.tool import DEFAULT_TOOL_NAMES, TOOLS, ToolConfig, get_tool
 
 app = typer.Typer(
@@ -124,6 +130,14 @@ def main(
             help="Prompt to pass to the skill.",
         ),
     ] = None,
+    source: Annotated[
+        Optional[str],
+        typer.Option(
+            "--source",
+            "-s",
+            help="Source name to use for this run.",
+        ),
+    ] = None,
     global_install: Annotated[
         bool,
         typer.Option(
@@ -180,11 +194,14 @@ def main(
             console.print("[dim]Use 'agr add' for local skills[/dim]")
             raise typer.Exit(1)
 
+        config_path = find_config()
+        config = AgrConfig.load(config_path) if config_path else AgrConfig()
+        resolver = config.get_source_resolver()
+        if source:
+            resolver.get(source)
+
         # Check tool CLI is available
         _check_tool_cli(tool_config)
-
-        # Get GitHub coordinates
-        username, repo_name = parsed.get_github_repo()
 
         console.print(f"[dim]Downloading {handle}...[/dim]")
 
@@ -192,22 +209,40 @@ def main(
         prefixed_name = f"{AGRX_PREFIX}{parsed.name}"
 
         # Download and install
-        with downloaded_repo(username, repo_name) as repo_dir:
-            # Create a modified handle for the prefixed installation
-            temp_handle = ParsedHandle(
-                username=parsed.username,
-                repo=parsed.repo,
-                name=prefixed_name,
-            )
+        owner, repo_name = parsed.get_github_repo()
+        installed_path = None
+        for source_config in resolver.ordered(source):
+            try:
+                with downloaded_repo(source_config, owner, repo_name) as repo_dir:
+                    if find_skill_in_repo(repo_dir, parsed.name) is None:
+                        continue
+                    # Create a modified handle for the prefixed installation
+                    temp_handle = ParsedHandle(
+                        username=parsed.username,
+                        repo=parsed.repo,
+                        name=prefixed_name,
+                    )
 
-            installed_path = install_skill_from_repo(
-                repo_dir,
-                parsed.name,
-                temp_handle,
-                skills_dir,
-                tool_config,
-                repo_root,
-                overwrite=True,
+                    installed_path = install_skill_from_repo(
+                        repo_dir,
+                        parsed.name,
+                        temp_handle,
+                        skills_dir,
+                        tool_config,
+                        repo_root,
+                        overwrite=True,
+                        install_source=source_config.name,
+                    )
+                    break
+            except RepoNotFoundError:
+                if source is not None:
+                    raise
+                continue
+
+        if installed_path is None:
+            raise SkillNotFoundError(
+                f"Skill '{parsed.name}' not found in sources: "
+                f"{', '.join(s.name for s in resolver.ordered(source))}"
             )
 
         # For consistency, update temp_skill_path to match

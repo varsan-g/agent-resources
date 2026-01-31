@@ -53,6 +53,7 @@ That's it. The skill is now available in your configured tool (Claude Code, Code
 ```bash
 agr add anthropics/skills/frontend-design     # Install a skill
 agr add anthropics/skills/pdf anthropics/skills/mcp-builder   # Install multiple
+agr add anthropics/skills/pdf --source github # Install from an explicit source
 ```
 
 ### Handle format
@@ -71,6 +72,7 @@ username/repo/skill-name    → From a specific repo
 agrx anthropics/skills/pdf                              # Run a skill instantly
 agrx anthropics/skills/pdf -p "Extract tables from report.pdf"   # With a prompt
 agrx anthropics/skills/skill-creator -i                 # Run, then continue chatting
+agrx anthropics/skills/pdf --source github              # Explicit source
 ```
 
 ---
@@ -80,11 +82,20 @@ agrx anthropics/skills/skill-creator -i                 # Run, then continue cha
 Your dependencies are tracked in `agr.toml`:
 
 ```toml
+default_source = "github"
+
 dependencies = [
     {handle = "anthropics/skills/frontend-design", type = "skill"},
     {handle = "anthropics/skills/brand-guidelines", type = "skill"},
 ]
+
+[[source]]
+name = "github"
+type = "git"
+url = "https://github.com/{owner}/{repo}.git"
 ```
+
+Note: `dependencies` must appear before any `[[source]]` blocks in `agr.toml`.
 
 Teammates run:
 

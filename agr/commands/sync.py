@@ -14,6 +14,7 @@ from agr.handle import (
     parse_handle,
 )
 from agr.metadata import build_handle_id, read_skill_metadata, write_skill_metadata
+from agr.source import DEFAULT_SOURCE_NAME
 from agr.skill import SKILL_MARKER, is_valid_skill_dir, update_skill_md_name
 from agr.tool import ToolConfig
 
@@ -86,7 +87,7 @@ def _migrate_flat_installed_names(
         return
 
     # Build handles from config dependencies
-    handles_by_name: dict[str, list[ParsedHandle]] = {}
+    handles_by_name: dict[str, list[tuple[ParsedHandle, str | None]]] = {}
     for dep in config.dependencies:
         ref = dep.path or dep.handle or ""
         if not ref:
@@ -95,36 +96,49 @@ def _migrate_flat_installed_names(
             if dep.is_local:
                 path = Path(ref)
                 handle = ParsedHandle(is_local=True, name=path.name, local_path=path)
+                source_name = None
             else:
                 handle = parse_handle(ref)
+                source_name = dep.source or config.default_source
         except Exception:
             continue
-        handles_by_name.setdefault(handle.name, []).append(handle)
+        handles_by_name.setdefault(handle.name, []).append((handle, source_name))
 
     for skill_name, handles in handles_by_name.items():
         name_dir = skills_dir / skill_name
         name_dir_is_skill = is_valid_skill_dir(name_dir)
 
         # If a name dir exists, try to match metadata to a handle
-        matched_handle: ParsedHandle | None = None
+        matched_handle: tuple[ParsedHandle, str | None] | None = None
         if name_dir_is_skill:
             meta = read_skill_metadata(name_dir)
             if meta:
-                for handle in handles:
-                    if meta.get("id") == build_handle_id(handle, repo_root):
-                        matched_handle = handle
+                for handle, source_name in handles:
+                    handle_id = build_handle_id(handle, repo_root, source_name)
+                    legacy_id = (
+                        build_handle_id(handle, repo_root)
+                        if source_name == DEFAULT_SOURCE_NAME
+                        else None
+                    )
+                    if meta.get("id") in {handle_id, legacy_id}:
+                        matched_handle = (handle, source_name)
                         break
 
         # If there is only one handle for this name, ensure name dir metadata
         if len(handles) == 1:
-            handle = handles[0]
-            handle_id = build_handle_id(handle, repo_root)
+            handle, source_name = handles[0]
+            handle_id = build_handle_id(handle, repo_root, source_name)
             if name_dir_is_skill:
                 meta = read_skill_metadata(name_dir)
                 if not meta or meta.get("id") != handle_id:
                     update_skill_md_name(name_dir, name_dir.name)
                     write_skill_metadata(
-                        name_dir, handle, repo_root, tool.name, name_dir.name
+                        name_dir,
+                        handle,
+                        repo_root,
+                        tool.name,
+                        name_dir.name,
+                        source_name,
                     )
                 continue
 
@@ -136,7 +150,12 @@ def _migrate_flat_installed_names(
                         full_dir.rename(name_dir)
                         update_skill_md_name(name_dir, name_dir.name)
                         write_skill_metadata(
-                            name_dir, handle, repo_root, tool.name, name_dir.name
+                            name_dir,
+                            handle,
+                            repo_root,
+                            tool.name,
+                            name_dir.name,
+                            source_name,
                         )
                         console.print(
                             f"[blue]Migrated:[/blue] {full_dir.name} -> {name_dir.name}"
@@ -153,16 +172,26 @@ def _migrate_flat_installed_names(
         if matched_handle:
             update_skill_md_name(name_dir, name_dir.name)
             write_skill_metadata(
-                name_dir, matched_handle, repo_root, tool.name, name_dir.name
+                name_dir,
+                matched_handle[0],
+                repo_root,
+                tool.name,
+                name_dir.name,
+                matched_handle[1],
             )
 
         # Ensure metadata on full-name dirs for all handles
-        for handle in handles:
+        for handle, source_name in handles:
             full_dir = skills_dir / handle.to_installed_name()
             if is_valid_skill_dir(full_dir):
                 update_skill_md_name(full_dir, full_dir.name)
                 write_skill_metadata(
-                    full_dir, handle, repo_root, tool.name, full_dir.name
+                    full_dir,
+                    handle,
+                    repo_root,
+                    tool.name,
+                    full_dir.name,
+                    source_name,
                 )
 
 
@@ -200,6 +229,8 @@ def run_sync() -> None:
         console.print("[yellow]No dependencies in agr.toml.[/yellow] Nothing to sync.")
         return
 
+    resolver = config.get_source_resolver()
+
     # Track results per dependency (not per tool)
     results: list[tuple[str, str, str | None]] = []  # (identifier, status, error)
 
@@ -214,10 +245,15 @@ def run_sync() -> None:
                 ref = dep.handle or ""
 
             handle = parse_handle(ref)
+            if dep.is_local:
+                source_name = None
+            else:
+                source_name = dep.source or config.default_source
 
             # Check if already installed in all tools
             all_installed = all(
-                is_skill_installed(handle, repo_root, tool) for tool in tools
+                is_skill_installed(handle, repo_root, tool, source_name)
+                for tool in tools
             )
 
             if all_installed:
@@ -228,12 +264,17 @@ def run_sync() -> None:
             tools_needing_install = [
                 tool
                 for tool in tools
-                if not is_skill_installed(handle, repo_root, tool)
+                if not is_skill_installed(handle, repo_root, tool, source_name)
             ]
 
             # Install to all tools that need it (downloads once)
             fetch_and_install_to_tools(
-                handle, repo_root, tools_needing_install, overwrite=False
+                handle,
+                repo_root,
+                tools_needing_install,
+                overwrite=False,
+                resolver=resolver,
+                source=source_name,
             )
 
             results.append((identifier, "installed", None))

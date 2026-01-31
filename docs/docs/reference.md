@@ -105,21 +105,32 @@ Downloads the skill, runs it with the selected tool, and cleans up afterwards.
 agrx anthropics/skills/pdf
 agrx anthropics/skills/pdf -p "Extract tables from report.pdf"
 agrx kasperjunge/commit -i
+agrx kasperjunge/commit --source github
 ```
 
 ## agr.toml Format
 
 ```toml
+default_source = "github"
+
 dependencies = [
     {handle = "anthropics/skills/frontend-design"},
     {handle = "kasperjunge/commit"},
     {handle = "./local-skill"},
 ]
+
+[[source]]
+name = "github"
+type = "git"
+url = "https://github.com/{owner}/{repo}.git"
 ```
 
 Each dependency has:
 
 - `handle` — Remote handle or local path
+- `source` — Optional source name for remote handles
+
+Note: `dependencies` must appear before any `[[source]]` blocks in `agr.toml`.
 
 ## Troubleshooting
 

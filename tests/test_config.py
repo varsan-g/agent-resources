@@ -48,6 +48,8 @@ class TestAgrConfig:
         """Loading nonexistent file returns empty config."""
         config = AgrConfig.load(tmp_path / "agr.toml")
         assert config.dependencies == []
+        assert config.default_source == "github"
+        assert config.sources[0].name == "github"
 
     def test_load_empty(self, tmp_path):
         """Loading empty file returns empty config."""
@@ -55,6 +57,8 @@ class TestAgrConfig:
         config_path.write_text("dependencies = []")
         config = AgrConfig.load(config_path)
         assert config.dependencies == []
+        assert config.default_source == "github"
+        assert config.sources[0].name == "github"
 
     def test_load_with_dependencies(self, tmp_path):
         """Load config with dependencies."""
@@ -77,6 +81,26 @@ dependencies = [
         with pytest.raises(ConfigError):
             AgrConfig.load(config_path)
 
+    def test_dependency_unknown_source_raises(self, tmp_path):
+        """Unknown dependency source raises ConfigError."""
+        config_path = tmp_path / "agr.toml"
+        config_path.write_text(
+            """
+default_source = "github"
+
+dependencies = [
+    { handle = "user/skill", type = "skill", source = "gitlab" },
+]
+
+[[source]]
+name = "github"
+type = "git"
+url = "https://github.com/{owner}/{repo}.git"
+"""
+        )
+        with pytest.raises(ConfigError, match="Unknown source"):
+            AgrConfig.load(config_path)
+
     def test_save(self, tmp_path):
         """Save config to file."""
         config = AgrConfig()
@@ -88,6 +112,8 @@ dependencies = [
         loaded = AgrConfig.load(config_path)
         assert len(loaded.dependencies) == 1
         assert loaded.dependencies[0].handle == "kasperjunge/commit"
+        assert loaded.default_source == "github"
+        assert loaded.sources[0].name == "github"
 
     def test_add_dependency(self):
         """Add a dependency."""
@@ -274,3 +300,20 @@ class TestGetTools:
 
         content = config_path.read_text()
         assert "tools" not in content
+        assert "default_source" in content
+        assert "[[source]]" in content
+
+    def test_dependency_with_source_roundtrip(self, tmp_path):
+        """Dependency source persists through save/load."""
+        config = AgrConfig()
+        config.sources = [
+            *config.sources,
+        ]
+        config.add_dependency(
+            Dependency(type="skill", handle="user/skill", source="github")
+        )
+        config_path = tmp_path / "agr.toml"
+        config.save(config_path)
+
+        loaded = AgrConfig.load(config_path)
+        assert loaded.dependencies[0].source == "github"
