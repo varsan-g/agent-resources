@@ -56,6 +56,10 @@ agr add anthropics/skills/pdf anthropics/skills/mcp-builder   # Install multiple
 agr add anthropics/skills/pdf --source github # Install from an explicit source
 ```
 
+Remote installs require `git` to be available on your system.
+
+**Beta note:** Multi-source support is only in the beta release right now. Install `agr==0.7.2b1` to use `default_source`, `[[source]]`, or `--source`.
+
 ### Handle format
 
 ```

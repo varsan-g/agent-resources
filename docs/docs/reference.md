@@ -6,6 +6,8 @@ title: Reference
 
 ## CLI Commands
 
+**Beta note:** Multi-source support is only in the beta release right now. Install `agr==0.7.2b1` to use `default_source`, `[[source]]`, or `--source`.
+
 ### agr add
 
 Install skills from GitHub or local paths.
@@ -21,6 +23,7 @@ agr add <handle>...
 **Options:**
 
 - `--overwrite`, `-o` — Replace existing skills
+- `--source <name>` — Use a specific source from `agr.toml`
 
 **Examples:**
 
@@ -29,6 +32,7 @@ agr add anthropics/skills/frontend-design
 agr add kasperjunge/commit kasperjunge/pr
 agr add ./my-skill
 agr add anthropics/skills/pdf --overwrite
+agr add anthropics/skills/pdf --source github
 ```
 
 ### agr remove
@@ -98,6 +102,7 @@ Downloads the skill, runs it with the selected tool, and cleans up afterwards.
 - `--interactive`, `-i` — Run skill, then continue in interactive mode
 - `--prompt`, `-p` — Prompt to pass to the skill
 - `--global`, `-g` — Install to the global tool skills directory (e.g. `~/.claude/skills/`, `~/.codex/skills/`) instead of the repo-local one
+- `--source <name>` — Use a specific source from `agr.toml`
 
 **Examples:**
 
@@ -157,6 +162,10 @@ Check:
 - Username and repo name are correct
 - Repository is public
 - Default branch is `main`
+
+### Git not installed
+
+Remote installs require `git` to be available on your system.
 
 ### Not in a git repository
 

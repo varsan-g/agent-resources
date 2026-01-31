@@ -20,6 +20,8 @@ A package and project manager for AI agent skills. Install, share, and manage sk
 pip install agr
 ```
 
+**Beta note:** Multi-source support is only in the beta release right now. Install `agr==0.7.2b1` to use `default_source`, `[[source]]`, or `--source`.
+
 ## Add a Skill
 
 ```bash
@@ -27,6 +29,7 @@ agr add anthropics/skills/frontend-design
 ```
 
 Done. The skill is available in your configured tool (Claude Code, Codex, Cursor, or Copilot).
+Use `--source <name>` to pick a non-default source from `agr.toml`.
 
 ## Run a Skill Directly
 
