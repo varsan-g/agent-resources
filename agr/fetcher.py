@@ -340,24 +340,8 @@ def _git_list_files(repo_dir: Path) -> list[str]:
     return [line for line in result.stdout.splitlines() if line.strip()]
 
 
-def _checkout_sparse(repo_dir: Path, rel_path: Path) -> None:
-    """Checkout only the given path using sparse checkout."""
-    init = subprocess.run(
-        ["git", "-C", str(repo_dir), "sparse-checkout", "init", "--cone"],
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    if init.returncode != 0:
-        raise AgrError("Failed to initialize sparse checkout.")
-    set_cmd = subprocess.run(
-        ["git", "-C", str(repo_dir), "sparse-checkout", "set", rel_path.as_posix()],
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    if set_cmd.returncode != 0:
-        raise AgrError("Failed to set sparse checkout path.")
+def _checkout_full(repo_dir: Path) -> None:
+    """Checkout the full repository."""
     checkout = subprocess.run(
         ["git", "-C", str(repo_dir), "checkout", "-f", "main"],
         capture_output=True,
@@ -368,7 +352,37 @@ def _checkout_sparse(repo_dir: Path, rel_path: Path) -> None:
         raise AgrError("Failed to checkout repository.")
 
 
-def _prepare_repo_for_skill(repo_dir: Path, skill_name: str) -> Path | None:
+def _checkout_sparse_paths(repo_dir: Path, rel_paths: list[Path]) -> None:
+    """Checkout only the given paths using sparse checkout."""
+    if not rel_paths:
+        raise AgrError("No paths provided for sparse checkout.")
+    init = subprocess.run(
+        ["git", "-C", str(repo_dir), "sparse-checkout", "init", "--cone"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if init.returncode != 0:
+        raise AgrError("Failed to initialize sparse checkout.")
+    cmd = ["git", "-C", str(repo_dir), "sparse-checkout", "set"]
+    cmd.extend([rel_path.as_posix() for rel_path in rel_paths])
+    set_cmd = subprocess.run(
+        cmd,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if set_cmd.returncode != 0:
+        raise AgrError("Failed to set sparse checkout path.")
+    _checkout_full(repo_dir)
+
+
+def _checkout_sparse(repo_dir: Path, rel_path: Path) -> None:
+    """Checkout only the given path using sparse checkout."""
+    _checkout_sparse_paths(repo_dir, [rel_path])
+
+
+def prepare_repo_for_skill(repo_dir: Path, skill_name: str) -> Path | None:
     """Prepare a repo so that only the skill path is checked out."""
     try:
         paths = _git_list_files(repo_dir)
@@ -382,15 +396,49 @@ def _prepare_repo_for_skill(repo_dir: Path, skill_name: str) -> Path | None:
         return skill_path
     except AgrError:
         # Fallback: full checkout + scan
-        result = subprocess.run(
-            ["git", "-C", str(repo_dir), "checkout", "-f", "main"],
-            capture_output=True,
-            text=True,
-            check=False,
-        )
-        if result.returncode != 0:
-            raise
+        _checkout_full(repo_dir)
         return find_skill_in_repo(repo_dir, skill_name)
+
+
+def prepare_repo_for_skills(repo_dir: Path, skill_names: list[str]) -> dict[str, Path]:
+    """Prepare a repo so multiple skill paths are checked out.
+
+    Returns a mapping of skill name to resolved path for those found.
+    Missing skills are omitted from the mapping.
+    """
+    unique_names = list(dict.fromkeys(skill_names))
+    if not unique_names:
+        return {}
+
+    try:
+        paths = _git_list_files(repo_dir)
+        rel_paths: dict[str, Path] = {}
+        for name in unique_names:
+            skill_rel = find_skill_in_repo_listing(paths, name)
+            if skill_rel is None:
+                continue
+            rel_paths[name] = Path(skill_rel)
+
+        if rel_paths:
+            _checkout_sparse_paths(repo_dir, list(rel_paths.values()))
+            resolved = {
+                name: repo_dir / rel_path for name, rel_path in rel_paths.items()
+            }
+            for path in resolved.values():
+                if not path.exists():
+                    raise AgrError("Failed to checkout skill path.")
+            return resolved
+
+        return {}
+    except AgrError:
+        # Fallback: full checkout + scan
+        _checkout_full(repo_dir)
+        resolved: dict[str, Path] = {}
+        for name in unique_names:
+            skill_path = find_skill_in_repo(repo_dir, name)
+            if skill_path is not None:
+                resolved[name] = skill_path
+        return resolved
 
 
 def _build_handle_ids(
@@ -499,6 +547,56 @@ def install_skill_from_repo(
     )
 
 
+def install_skill_from_repo_to_tools(
+    repo_dir: Path,
+    skill_name: str,
+    handle: ParsedHandle,
+    tools: list[ToolConfig],
+    repo_root: Path | None,
+    overwrite: bool = False,
+    install_source: str | None = None,
+    skill_source: Path | None = None,
+) -> dict[str, Path]:
+    """Install a skill from a downloaded repo to multiple tools.
+
+    On partial failure, already installed tools are rolled back.
+    """
+    if not tools:
+        raise ValueError("No tools provided for installation")
+
+    installed: dict[str, Path] = {}
+
+    def _rollback() -> None:
+        for rollback_path in installed.values():
+            try:
+                shutil.rmtree(rollback_path)
+            except OSError as e:
+                logger.warning(f"Failed to rollback {rollback_path}: {e}")
+
+    for tool in tools:
+        try:
+            skills_dir = tool.get_skills_dir(repo_root) if repo_root else None
+            if skills_dir is None:
+                raise ValueError("repo_root is required for tool installation")
+            path = install_skill_from_repo(
+                repo_dir,
+                skill_name,
+                handle,
+                skills_dir,
+                tool,
+                repo_root,
+                overwrite,
+                install_source=install_source,
+                skill_source=skill_source,
+            )
+            installed[tool.name] = path
+        except Exception:
+            _rollback()
+            raise
+
+    return installed
+
+
 def install_local_skill(
     source_path: Path,
     dest_dir: Path,
@@ -546,6 +644,15 @@ def install_local_skill(
         repo_root = dest_dir.parent.parent
 
     default_dest = dest_dir / handle.to_skill_path(tool)
+    if source_path.resolve() == default_dest.resolve() and is_valid_skill_dir(
+        default_dest
+    ):
+        if read_skill_metadata(default_dest) is None:
+            write_skill_metadata(
+                default_dest, handle, repo_root, tool.name, default_dest.name
+            )
+        return default_dest
+
     conflicts, has_unknown = _find_local_name_conflicts(
         handle, dest_dir, tool, repo_root, default_dest
     )
@@ -612,7 +719,7 @@ def fetch_and_install(
     for source_config in resolver.ordered(source):
         try:
             with downloaded_repo(source_config, owner, repo_name) as repo_dir:
-                skill_source = _prepare_repo_for_skill(repo_dir, handle.name)
+                skill_source = prepare_repo_for_skill(repo_dir, handle.name)
                 if skill_source is None:
                     continue
                 return install_skill_from_repo(
@@ -697,7 +804,7 @@ def fetch_and_install_to_tools(
     for source_config in resolver.ordered(source):
         try:
             with downloaded_repo(source_config, owner, repo_name) as repo_dir:
-                skill_source = _prepare_repo_for_skill(repo_dir, handle.name)
+                skill_source = prepare_repo_for_skill(repo_dir, handle.name)
                 if skill_source is None:
                     continue
                 for tool in tools:

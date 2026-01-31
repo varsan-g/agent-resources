@@ -88,7 +88,11 @@ def run_list() -> None:
 
         # Check installation status
         try:
-            handle = parse_handle(identifier)
+            if dep.is_local:
+                path = Path(identifier)
+                handle = ParsedHandle(is_local=True, name=path.name, local_path=path)
+            else:
+                handle = parse_handle(identifier, prefer_local=False)
             source_name = (
                 None if dep.is_local else (dep.source or config.default_source)
             )

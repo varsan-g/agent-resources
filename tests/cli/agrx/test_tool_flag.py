@@ -90,3 +90,16 @@ class TestAgrxToolFromConfig:
         result = agrx("user/skill", "--tool", "cursor")
 
         assert_cli(result).failed().stdout_contains("agent CLI not found")
+
+    @pytest.mark.skipif(
+        shutil.which("agent") is not None, reason="agent CLI is installed"
+    )
+    def test_agrx_default_tool_override(self, agrx, cli_config):
+        """agrx uses default_tool from agr.toml when set."""
+        cli_config(
+            'tools = ["claude", "cursor"]\ndefault_tool = "cursor"\ndependencies = []'
+        )
+
+        result = agrx("user/skill")
+
+        assert_cli(result).failed().stdout_contains("agent CLI not found")

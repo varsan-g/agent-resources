@@ -130,7 +130,7 @@ class ParsedHandle:
         return self.name
 
 
-def parse_handle(ref: str) -> ParsedHandle:
+def parse_handle(ref: str, *, prefer_local: bool = True) -> ParsedHandle:
     """Parse a handle string into components.
 
     Args:
@@ -139,6 +139,7 @@ def parse_handle(ref: str) -> ParsedHandle:
             - "maragudk/skills/collaboration" -> remote, user=maragudk, repo=skills, name=collaboration
             - "./my-skill" -> local, name=my-skill
             - "../other/skill" -> local, name=skill
+        prefer_local: Prefer local paths when the ref exists on disk.
 
     Returns:
         ParsedHandle with parsed components.
@@ -151,19 +152,18 @@ def parse_handle(ref: str) -> ParsedHandle:
 
     ref = ref.strip()
 
-    # Local path detection: starts with . or /
-    if ref.startswith(("./", "../", "/")):
-        path = Path(ref)
-        _validate_no_separator_in_name(ref, path.name)
-        return ParsedHandle(
-            is_local=True,
-            name=path.name,
-            local_path=path,
-        )
+    if prefer_local:
+        # Local path detection: starts with . or /
+        if ref.startswith(("./", "../", "/")):
+            path = Path(ref)
+            _validate_no_separator_in_name(ref, path.name)
+            return ParsedHandle(
+                is_local=True,
+                name=path.name,
+                local_path=path,
+            )
 
-    # Also treat as local if it's a relative path that exists
-    if "/" not in ref or (Path(ref).exists() and not ref.count("/") == 1):
-        # Check if it's a path (has multiple segments or exists)
+        # Prefer local if the path exists (even with one slash)
         test_path = Path(ref)
         if test_path.exists():
             _validate_no_separator_in_name(ref, test_path.name)

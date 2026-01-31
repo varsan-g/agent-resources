@@ -45,6 +45,17 @@ class TestParseHandle:
         assert h.is_local
         assert h.name == "skill"
 
+    def test_existing_path_prefers_local(self, tmp_path, monkeypatch):
+        """Existing path with one slash is treated as local."""
+        skill_dir = tmp_path / "user" / "skill"
+        skill_dir.mkdir(parents=True)
+        monkeypatch.chdir(tmp_path)
+
+        h = parse_handle("user/skill")
+
+        assert h.is_local
+        assert h.local_path == skill_dir.relative_to(tmp_path)
+
     def test_empty_raises(self):
         """Empty handle raises error."""
         with pytest.raises(InvalidHandleError):

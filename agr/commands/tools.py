@@ -1,13 +1,14 @@
 """agr tools command implementation."""
 
 import shutil
+from pathlib import Path
 
 from rich.console import Console
 
 from agr.config import AgrConfig, find_config, find_repo_root
 from agr.exceptions import AgrError
 from agr.fetcher import fetch_and_install_to_tools, is_skill_installed
-from agr.handle import parse_handle
+from agr.handle import ParsedHandle, parse_handle
 from agr.tool import DEFAULT_TOOL_NAMES, TOOLS
 
 console = Console()
@@ -130,7 +131,13 @@ def run_tools_add(tool_names: list[str]) -> None:
                     ref = dep.handle or ""
                     source_name = dep.source or config.default_source
 
-                handle = parse_handle(ref)
+                if dep.is_local:
+                    path = Path(ref)
+                    handle = ParsedHandle(
+                        is_local=True, name=path.name, local_path=path
+                    )
+                else:
+                    handle = parse_handle(ref, prefer_local=False)
 
                 # Check which new tools need installation
                 tools_needing_install = [

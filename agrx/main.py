@@ -17,9 +17,8 @@ from agr.exceptions import (
     RepoNotFoundError,
     SkillNotFoundError,
 )
-from agr.fetcher import downloaded_repo, install_skill_from_repo
+from agr.fetcher import downloaded_repo, install_skill_from_repo, prepare_repo_for_skill
 from agr.handle import ParsedHandle, parse_handle
-from agr.skill import find_skill_in_repo
 from agr.tool import DEFAULT_TOOL_NAMES, TOOLS, ToolConfig, get_tool
 
 app = typer.Typer(
@@ -39,6 +38,8 @@ def _get_default_tool() -> str:
     config_path = find_config()
     if config_path:
         config = AgrConfig.load(config_path)
+        if config.default_tool:
+            return config.default_tool
         if config.tools:
             return config.tools[0]
     return DEFAULT_TOOL_NAMES[0]
@@ -214,7 +215,8 @@ def main(
         for source_config in resolver.ordered(source):
             try:
                 with downloaded_repo(source_config, owner, repo_name) as repo_dir:
-                    if find_skill_in_repo(repo_dir, parsed.name) is None:
+                    skill_source = prepare_repo_for_skill(repo_dir, parsed.name)
+                    if skill_source is None:
                         continue
                     # Create a modified handle for the prefixed installation
                     temp_handle = ParsedHandle(
@@ -232,6 +234,7 @@ def main(
                         repo_root,
                         overwrite=True,
                         install_source=source_config.name,
+                        skill_source=skill_source,
                     )
                     break
             except RepoNotFoundError:

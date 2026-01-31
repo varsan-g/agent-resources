@@ -27,3 +27,22 @@ class TestAgrSync:
         result = agr("sync")
 
         assert_cli(result).succeeded().stdout_contains("up to date")
+
+    def test_sync_instructions(self, agr, cli_project, cli_config):
+        """agr sync syncs instruction files when configured."""
+        (cli_project / "CLAUDE.md").write_text("Claude instructions\n")
+        (cli_project / "AGENTS.md").write_text("Agents instructions\n")
+        cli_config(
+            """
+tools = ["claude", "codex"]
+sync_instructions = true
+dependencies = []
+"""
+        )
+
+        result = agr("sync")
+
+        assert_cli(result).succeeded()
+        assert (cli_project / "AGENTS.md").read_text() == (
+            cli_project / "CLAUDE.md"
+        ).read_text()

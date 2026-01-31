@@ -1,17 +1,30 @@
 """agr sync command implementation."""
 
+from dataclasses import dataclass
 from pathlib import Path
 
 from rich.console import Console
 
 from agr.config import AgrConfig, find_config, find_repo_root
 from agr.exceptions import AgrError
-from agr.fetcher import fetch_and_install_to_tools, is_skill_installed
+from agr.fetcher import (
+    downloaded_repo,
+    fetch_and_install_to_tools,
+    install_skill_from_repo_to_tools,
+    is_skill_installed,
+    prepare_repo_for_skill,
+    prepare_repo_for_skills,
+)
 from agr.handle import (
     INSTALLED_NAME_SEPARATOR,
     LEGACY_SEPARATOR,
     ParsedHandle,
     parse_handle,
+)
+from agr.instructions import (
+    canonical_instruction_file,
+    detect_instruction_files,
+    sync_instruction_files,
 )
 from agr.metadata import build_handle_id, read_skill_metadata, write_skill_metadata
 from agr.source import DEFAULT_SOURCE_NAME
@@ -19,6 +32,46 @@ from agr.skill import SKILL_MARKER, is_valid_skill_dir, update_skill_md_name
 from agr.tool import ToolConfig
 
 console = Console()
+
+
+@dataclass
+class SyncEntry:
+    index: int
+    identifier: str
+    handle: ParsedHandle
+    source_name: str | None
+
+
+def _sync_instructions_if_configured(
+    repo_root: Path, config: AgrConfig, tools: list[ToolConfig]
+) -> None:
+    if not config.sync_instructions:
+        return
+    if len(tools) < 2:
+        return
+
+    existing_files = detect_instruction_files(repo_root)
+    if len(existing_files) < 2:
+        return
+
+    if config.canonical_instructions:
+        canonical_file = config.canonical_instructions
+    else:
+        tool_name = config.default_tool or tools[0].name
+        canonical_file = canonical_instruction_file(tool_name)
+
+    if canonical_file not in existing_files:
+        console.print(
+            f"[yellow]Instruction sync skipped:[/yellow] {canonical_file} not found."
+        )
+        return
+
+    updated = sync_instruction_files(repo_root, canonical_file, existing_files)
+    if updated:
+        updated_list = ", ".join(updated)
+        console.print(
+            f"[green]Synced instructions:[/green] {canonical_file} -> {updated_list}"
+        )
 
 
 def _migrate_legacy_directories(skills_dir: Path, tool: ToolConfig) -> None:
@@ -98,7 +151,7 @@ def _migrate_flat_installed_names(
                 handle = ParsedHandle(is_local=True, name=path.name, local_path=path)
                 source_name = None
             else:
-                handle = parse_handle(ref)
+                handle = parse_handle(ref, prefer_local=False)
                 source_name = dep.source or config.default_source
         except Exception:
             continue
@@ -219,6 +272,8 @@ def run_sync() -> None:
     # Get configured tools
     tools = config.get_tools()
 
+    _sync_instructions_if_configured(repo_root, config, tools)
+
     # Migrate legacy colon-based directories for flat tools
     for tool in tools:
         skills_dir = tool.get_skills_dir(repo_root)
@@ -232,66 +287,189 @@ def run_sync() -> None:
     resolver = config.get_source_resolver()
 
     # Track results per dependency (not per tool)
-    results: list[tuple[str, str, str | None]] = []  # (identifier, status, error)
+    results: list[tuple[str, str | None] | None] = [None] * len(config.dependencies)
+    pending_local: list[SyncEntry] = []
+    pending_remote: list[SyncEntry] = []
 
-    for dep in config.dependencies:
+    def _skill_not_found_message(name: str) -> str:
+        return (
+            f"Skill '{name}' not found in repository.\n"
+            f"No directory named '{name}' containing SKILL.md was found.\n"
+            f"Hint: Create a skill at 'skills/{name}/SKILL.md' or '{name}/SKILL.md'"
+        )
+
+    for index, dep in enumerate(config.dependencies):
         identifier = dep.identifier
-
         try:
             # Parse handle
+            ref = dep.path or dep.handle or ""
             if dep.is_local:
-                ref = dep.path or ""
+                path = Path(ref)
+                handle = ParsedHandle(is_local=True, name=path.name, local_path=path)
             else:
-                ref = dep.handle or ""
+                handle = parse_handle(ref, prefer_local=False)
+            source_name = None if dep.is_local else dep.source or config.default_source
 
-            handle = parse_handle(ref)
-            if dep.is_local:
-                source_name = None
-            else:
-                source_name = dep.source or config.default_source
-
-            # Check if already installed in all tools
-            all_installed = all(
-                is_skill_installed(handle, repo_root, tool, source_name)
-                for tool in tools
-            )
-
-            if all_installed:
-                results.append((identifier, "up-to-date", None))
-                continue
-
-            # Get tools that need installation
             tools_needing_install = [
                 tool
                 for tool in tools
                 if not is_skill_installed(handle, repo_root, tool, source_name)
             ]
 
-            # Install to all tools that need it (downloads once)
+            if not tools_needing_install:
+                results[index] = ("up-to-date", None)
+                continue
+
+            entry = SyncEntry(
+                index=index,
+                identifier=identifier,
+                handle=handle,
+                source_name=source_name,
+            )
+            if dep.is_local:
+                pending_local.append(entry)
+            else:
+                pending_remote.append(entry)
+        except AgrError as e:
+            results[index] = ("error", str(e))
+        except Exception as e:
+            results[index] = ("error", f"Unexpected: {e}")
+
+    # Local installs (no download)
+    for entry in pending_local:
+        handle = entry.handle
+        tools_needing_install = [
+            tool
+            for tool in tools
+            if not is_skill_installed(handle, repo_root, tool, entry.source_name)
+        ]
+        if not tools_needing_install:
+            results[entry.index] = ("up-to-date", None)
+            continue
+        try:
             fetch_and_install_to_tools(
                 handle,
                 repo_root,
                 tools_needing_install,
                 overwrite=False,
                 resolver=resolver,
-                source=source_name,
+                source=None,
             )
-
-            results.append((identifier, "installed", None))
-
+            results[entry.index] = ("installed", None)
         except FileExistsError as e:
-            results.append((identifier, "error", str(e)))
+            results[entry.index] = ("error", str(e))
         except AgrError as e:
-            results.append((identifier, "error", str(e)))
+            results[entry.index] = ("error", str(e))
         except Exception as e:
-            results.append((identifier, "error", f"Unexpected: {e}"))
+            results[entry.index] = ("error", f"Unexpected: {e}")
+
+    # Remote installs grouped by repo/source (download once per repo)
+    grouped: dict[tuple[str, str, str], list[SyncEntry]] = {}
+    for entry in pending_remote:
+        handle = entry.handle
+        source_name = entry.source_name or config.default_source
+        owner, repo_name = handle.get_github_repo()
+        key = (source_name, owner, repo_name)
+        grouped.setdefault(key, []).append(entry)
+
+    for (source_name, owner, repo_name), entries in grouped.items():
+        try:
+            source_config = resolver.get(source_name)
+            with downloaded_repo(source_config, owner, repo_name) as repo_dir:
+                if len(entries) == 1:
+                    entry = entries[0]
+                    handle = entry.handle
+                    tools_needing_install = [
+                        tool
+                        for tool in tools
+                        if not is_skill_installed(
+                            handle, repo_root, tool, entry.source_name
+                        )
+                    ]
+                    if not tools_needing_install:
+                        results[entry.index] = ("up-to-date", None)
+                        continue
+                    skill_source = prepare_repo_for_skill(repo_dir, handle.name)
+                    if skill_source is None:
+                        results[entry.index] = (
+                            "error",
+                            _skill_not_found_message(handle.name),
+                        )
+                        continue
+                    try:
+                        install_skill_from_repo_to_tools(
+                            repo_dir,
+                            handle.name,
+                            handle,
+                            tools_needing_install,
+                            repo_root,
+                            overwrite=False,
+                            install_source=source_name,
+                            skill_source=skill_source,
+                        )
+                        results[entry.index] = ("installed", None)
+                    except FileExistsError as e:
+                        results[entry.index] = ("error", str(e))
+                    except AgrError as e:
+                        results[entry.index] = ("error", str(e))
+                    except Exception as e:
+                        results[entry.index] = ("error", f"Unexpected: {e}")
+                    continue
+
+                skill_names = [entry.handle.name for entry in entries]
+                skill_sources = prepare_repo_for_skills(repo_dir, skill_names)
+                for entry in entries:
+                    handle = entry.handle
+                    tools_needing_install = [
+                        tool
+                        for tool in tools
+                        if not is_skill_installed(
+                            handle, repo_root, tool, entry.source_name
+                        )
+                    ]
+                    if not tools_needing_install:
+                        results[entry.index] = ("up-to-date", None)
+                        continue
+                    skill_source = skill_sources.get(handle.name)
+                    if skill_source is None:
+                        results[entry.index] = (
+                            "error",
+                            _skill_not_found_message(handle.name),
+                        )
+                        continue
+                    try:
+                        install_skill_from_repo_to_tools(
+                            repo_dir,
+                            handle.name,
+                            handle,
+                            tools_needing_install,
+                            repo_root,
+                            overwrite=False,
+                            install_source=source_name,
+                            skill_source=skill_source,
+                        )
+                        results[entry.index] = ("installed", None)
+                    except FileExistsError as e:
+                        results[entry.index] = ("error", str(e))
+                    except AgrError as e:
+                        results[entry.index] = ("error", str(e))
+                    except Exception as e:
+                        results[entry.index] = ("error", f"Unexpected: {e}")
+        except AgrError as e:
+            for entry in entries:
+                results[entry.index] = ("error", str(e))
+        except Exception as e:
+            for entry in entries:
+                results[entry.index] = ("error", f"Unexpected: {e}")
 
     # Print results
     installed = 0
     up_to_date = 0
     errors = 0
 
-    for identifier, status, error in results:
+    for index, dep in enumerate(config.dependencies):
+        identifier = dep.identifier
+        status, error = results[index] or ("error", "Unexpected error")
         if status == "installed":
             console.print(f"[green]Installed:[/green] {identifier}")
             installed += 1
