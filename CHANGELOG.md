@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.7.2b2] - 2026-01-31
+
 ### Added
 - `agr init` now auto-discovers local skills, detects tool folders, and can migrate tool-folder skills into `./skills/`
 - New configuration keys for tool defaults and instruction sync: `default_tool`, `sync_instructions`, `canonical_instructions`
