@@ -154,6 +154,11 @@ def _get_github_token() -> str | None:
     return None
 
 
+def _is_github_source(source: SourceConfig) -> bool:
+    """Return True if the source URL points to GitHub."""
+    return "github.com" in source.url.lower()
+
+
 @contextmanager
 def downloaded_repo(
     source: SourceConfig, owner: str, repo_name: str
@@ -284,8 +289,14 @@ def _raise_clone_error(
         part for part in ((stderr or "").strip(), (stdout or "").strip()) if part
     ).strip()
     lowered = message.lower()
+    token_missing = _is_github_source(source) and not _get_github_token()
 
     if "authentication failed" in lowered or "permission denied" in lowered:
+        if token_missing:
+            raise AuthenticationError(
+                f"Authentication failed for source '{source.name}'. "
+                "Repository not found or requires authentication."
+            ) from None
         raise AuthenticationError(
             f"Authentication failed for source '{source.name}'."
         ) from None
@@ -300,6 +311,17 @@ def _raise_clone_error(
     if "could not resolve host" in lowered:
         raise AgrError(
             f"Network error: could not resolve host for source '{source.name}'."
+        ) from None
+    if token_missing and (
+        not lowered
+        or "could not read username" in lowered
+        or "terminal prompts disabled" in lowered
+        or "authentication required" in lowered
+        or "authorization failed" in lowered
+        or "access denied" in lowered
+    ):
+        raise RepoNotFoundError(
+            f"Repository '{owner}/{repo_name}' not found in source '{source.name}'."
         ) from None
 
     raise AgrError(f"Failed to clone repository from source '{source.name}'.") from None
