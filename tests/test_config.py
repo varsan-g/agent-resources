@@ -59,6 +59,9 @@ class TestAgrConfig:
         assert config.dependencies == []
         assert config.default_source == "github"
         assert config.sources[0].name == "github"
+        assert config.default_tool is None
+        assert config.sync_instructions is None
+        assert config.canonical_instructions is None
 
     def test_load_with_dependencies(self, tmp_path):
         """Load config with dependencies."""
@@ -73,6 +76,40 @@ dependencies = [
         assert len(config.dependencies) == 2
         assert config.dependencies[0].handle == "kasperjunge/commit"
         assert config.dependencies[1].path == "./my-skill"
+
+    def test_load_default_tool(self, tmp_path):
+        """Load config with default_tool."""
+        config_path = tmp_path / "agr.toml"
+        config_path.write_text(
+            'tools = ["claude", "codex"]\ndefault_tool = "codex"\ndependencies = []\n'
+        )
+        config = AgrConfig.load(config_path)
+        assert config.default_tool == "codex"
+
+    def test_load_invalid_default_tool_raises(self, tmp_path):
+        """Invalid default_tool raises ConfigError."""
+        config_path = tmp_path / "agr.toml"
+        config_path.write_text('default_tool = "unknown"\ndependencies = []\n')
+        with pytest.raises(ConfigError, match="Unknown default_tool"):
+            AgrConfig.load(config_path)
+
+    def test_load_canonical_instructions(self, tmp_path):
+        """Load config with canonical_instructions."""
+        config_path = tmp_path / "agr.toml"
+        config_path.write_text(
+            'canonical_instructions = "AGENTS.md"\ndependencies = []\n'
+        )
+        config = AgrConfig.load(config_path)
+        assert config.canonical_instructions == "AGENTS.md"
+
+    def test_load_invalid_canonical_instructions_raises(self, tmp_path):
+        """Invalid canonical_instructions raises ConfigError."""
+        config_path = tmp_path / "agr.toml"
+        config_path.write_text(
+            'canonical_instructions = "README.md"\ndependencies = []\n'
+        )
+        with pytest.raises(ConfigError, match="canonical_instructions"):
+            AgrConfig.load(config_path)
 
     def test_load_invalid_toml_raises(self, tmp_path):
         """Loading invalid TOML raises ConfigError."""

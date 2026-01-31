@@ -69,6 +69,9 @@ class AgrConfig:
         url = "https://github.com/{owner}/{repo}.git"
 
         tools = ["claude", "cursor"]  # Optional, defaults to ["claude"]
+        default_tool = "claude"  # Optional, overrides first tool
+        sync_instructions = true  # Optional
+        canonical_instructions = "CLAUDE.md"  # Optional
         dependencies = [
             { handle = "kasperjunge/commit", type = "skill" },
             { path = "./my-skill", type = "skill" },
@@ -79,6 +82,9 @@ class AgrConfig:
     tools: list[str] = field(default_factory=lambda: list(DEFAULT_TOOL_NAMES))
     sources: list[SourceConfig] = field(default_factory=default_sources)
     default_source: str = DEFAULT_SOURCE_NAME
+    default_tool: str | None = None
+    sync_instructions: bool | None = None
+    canonical_instructions: str | None = None
     _path: Path | None = field(default=None, repr=False)
 
     def get_tools(self) -> list[ToolConfig]:
@@ -137,6 +143,31 @@ class AgrConfig:
                 raise ConfigError(
                     f"Unknown tool '{tool_name}' in agr.toml. Available: {available}"
                 )
+
+        default_tool = doc.get("default_tool")
+        if default_tool is not None:
+            default_tool = str(default_tool)
+            if default_tool and default_tool not in TOOLS:
+                available = ", ".join(TOOLS.keys())
+                raise ConfigError(
+                    f"Unknown default_tool '{default_tool}' in agr.toml. Available: {available}"
+                )
+            config.default_tool = default_tool or None
+            if config.default_tool and config.default_tool not in config.tools:
+                raise ConfigError("default_tool must be listed in tools in agr.toml")
+
+        sync_instructions = doc.get("sync_instructions")
+        if sync_instructions is not None:
+            config.sync_instructions = bool(sync_instructions)
+
+        canonical_instructions = doc.get("canonical_instructions")
+        if canonical_instructions is not None:
+            canonical_instructions = str(canonical_instructions)
+            if canonical_instructions not in {"AGENTS.md", "CLAUDE.md"}:
+                raise ConfigError(
+                    "canonical_instructions must be 'AGENTS.md' or 'CLAUDE.md'"
+                )
+            config.canonical_instructions = canonical_instructions
 
         # Parse sources list
         sources_list = doc.get("source")
@@ -244,6 +275,17 @@ class AgrConfig:
             for tool in self.tools:
                 tools_array.append(tool)
             doc["tools"] = tools_array
+
+        if self.default_tool:
+            if self.default_tool not in self.tools:
+                raise ValueError("default_tool must be listed in tools")
+            doc["default_tool"] = self.default_tool
+
+        if self.sync_instructions is not None:
+            doc["sync_instructions"] = bool(self.sync_instructions)
+
+        if self.canonical_instructions:
+            doc["canonical_instructions"] = self.canonical_instructions
 
         # Build dependencies array
         deps_array = tomlkit.array()

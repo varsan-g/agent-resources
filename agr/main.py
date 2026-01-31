@@ -96,6 +96,56 @@ def init(
             help="Name for a new skill scaffold. If omitted, creates agr.toml.",
         ),
     ] = None,
+    interactive: Annotated[
+        bool,
+        typer.Option(
+            "--interactive",
+            "-i",
+            help="Run an interactive setup wizard.",
+        ),
+    ] = False,
+    tools: Annotated[
+        Optional[str],
+        typer.Option(
+            "--tools",
+            help="Comma-separated tool list (e.g., claude,codex).",
+        ),
+    ] = None,
+    default_tool: Annotated[
+        Optional[str],
+        typer.Option(
+            "--default-tool",
+            help="Default tool for agrx and instruction sync.",
+        ),
+    ] = None,
+    sync_instructions: Annotated[
+        Optional[bool],
+        typer.Option(
+            "--sync-instructions/--no-sync-instructions",
+            help="Sync instruction files on agr sync.",
+        ),
+    ] = None,
+    canonical_instructions: Annotated[
+        Optional[str],
+        typer.Option(
+            "--canonical-instructions",
+            help="Canonical instruction file (AGENTS.md or CLAUDE.md).",
+        ),
+    ] = None,
+    migrate: Annotated[
+        bool,
+        typer.Option(
+            "--migrate",
+            help="Copy discovered skills into ./skills/ (recommended layout).",
+        ),
+    ] = False,
+    prefer: Annotated[
+        Optional[str],
+        typer.Option(
+            "--prefer",
+            help="Duplicate resolution: shallowest (default) or newest.",
+        ),
+    ] = None,
 ) -> None:
     """Initialize agr.toml or create a skill scaffold.
 
@@ -106,7 +156,16 @@ def init(
         agr init           # Create agr.toml
         agr init my-skill  # Create my-skill/SKILL.md scaffold
     """
-    run_init(skill_name)
+    run_init(
+        skill_name,
+        interactive=interactive,
+        tools=tools,
+        default_tool=default_tool,
+        sync_instructions=sync_instructions,
+        canonical_instructions=canonical_instructions,
+        migrate=migrate,
+        prefer=prefer,
+    )
 
 
 @app.command()

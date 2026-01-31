@@ -163,6 +163,47 @@ def discover_skills_in_repo(repo_dir: Path) -> list[tuple[str, Path]]:
     return sorted(skills_by_name.items(), key=lambda x: x[0])
 
 
+def discover_all_skill_dirs(repo_dir: Path) -> list[Path]:
+    """Discover all skill directories in a repository (no dedupe).
+
+    Args:
+        repo_dir: Path to repository root
+
+    Returns:
+        List of skill directories, sorted by path for determinism
+    """
+    skill_dirs: list[Path] = []
+
+    for skill_md in repo_dir.rglob(SKILL_MARKER):
+        if _is_excluded_path(skill_md, repo_dir):
+            continue
+        skill_dirs.append(skill_md.parent)
+
+    return sorted(skill_dirs, key=lambda p: p.as_posix())
+
+
+def get_skill_frontmatter_name(skill_dir: Path) -> str | None:
+    """Extract the frontmatter name from SKILL.md if present."""
+    skill_md = skill_dir / SKILL_MARKER
+    if not skill_md.exists():
+        return None
+
+    content = skill_md.read_text()
+    if not content.startswith("---"):
+        return None
+
+    parts = content.split("---", 2)
+    if len(parts) < 3:
+        return None
+
+    frontmatter = parts[1]
+    for line in frontmatter.splitlines():
+        match = re.match(r"^\s*name\s*:\s*(.+)\s*$", line)
+        if match:
+            return match.group(1).strip()
+    return None
+
+
 def update_skill_md_name(skill_dir: Path, new_name: str) -> None:
     """Update the name field in SKILL.md.
 
