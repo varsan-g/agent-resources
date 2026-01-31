@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.7.2b1] - 2026-01-31
+
 ### Added
 - Multi-source configuration with `default_source` and `[[source]]` entries in `agr.toml`
 - `--source` flag on CLI commands to explicitly select a source
