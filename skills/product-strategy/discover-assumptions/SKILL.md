@@ -1,12 +1,20 @@
 ---
 name: discover-assumptions
-description: Use when the user needs to surface and prioritize assumptions behind outcomes, opportunities, or solution ideas and design experiments to test them.
+description: Use after solution concepts exist to surface and prioritize assumptions behind outcomes, opportunities, or solution ideas and design experiments to test them.
 ---
 
 # Discover Assumptions and Experiments
 
 ## Overview
 Surface the riskiest assumptions in an Opportunity Solution Tree and design the smallest tests that can prove or disprove them quickly.
+
+## Position in Workflow
+
+Step 4 of product strategy workflow:
+1. `/discover-outcomes` - Define outcomes
+2. `/discover-opportunities` - Identify opportunities
+3. `/ideate-solutions` - Explore solution concepts
+4. `/discover-assumptions` - Validate with experiments (THIS)
 
 ## Inputs (ask if missing, max 5)
 - Target node(s): outcome, opportunity, or solution
@@ -79,6 +87,9 @@ Surface the riskiest assumptions in an Opportunity Solution Tree and design the 
 
 ### Open Questions
 - ...
+
+### Next Step
+If assumptions are validated, proceed to product planning.
 ```
 
 ## Quick Reference

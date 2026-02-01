@@ -1,5 +1,5 @@
 ---
-name: release
+name: make-release
 description: Use when ready to publish a new version. Triggers on "release", "publish", "ship it", or version bump requests. Runs quality checks, bumps version, tags, and creates GitHub release.
 ---
 
@@ -19,7 +19,7 @@ Before releasing:
 - All work committed (clean working tree)
 - On `main` branch
 - `/code-review` passed
-- `/commit` completed (CHANGELOG updated)
+- `/commit-work` completed (CHANGELOG updated)
 
 ## Workflow
 
@@ -91,8 +91,7 @@ Or let them specify a custom version.
 ## Step 2: Verify Clean State
 
 ```bash
-git status
-git branch --show-current
+scripts/verify_release_state.sh
 ```
 
 **Requirements:**
@@ -104,9 +103,7 @@ If not clean: Run `/commit` first or stash changes.
 ## Step 3: Run Quality Checks
 
 ```bash
-ruff check .          # Linting
-ruff format --check . # Format check
-pytest -m "not e2e and not network and not slow"  # Tests (matches CI)
+scripts/run_release_checks.sh
 ```
 
 **All must pass.** No exceptions - releases with failing tests are forbidden.
@@ -115,15 +112,8 @@ pytest -m "not e2e and not network and not slow"  # Tests (matches CI)
 
 Update version in **both** files:
 
-1. **`agr/__init__.py`**:
-```python
-__version__ = "X.Y.Z"  # New version
-```
-
-2. **`pyproject.toml`**:
-```toml
-[project]
-version = "X.Y.Z"  # New version
+```bash
+uv run python scripts/bump_version.py X.Y.Z
 ```
 
 **Important:** Both files must have the same version number.
@@ -157,6 +147,12 @@ In `CHANGELOG.md`, convert the Unreleased section to a versioned release:
 
 Keep an empty `[Unreleased]` section at the top for future changes.
 
+Use the deterministic script to promote the changelog:
+
+```bash
+uv run python scripts/promote_changelog.py X.Y.Z
+```
+
 ## Step 6: Commit, Tag, and Push
 
 ```bash
@@ -167,9 +163,7 @@ Release vX.Y.Z
 Co-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>
 EOF
 )"
-git tag vX.Y.Z
-git push origin main
-git push origin vX.Y.Z
+scripts/tag_and_push.sh X.Y.Z
 ```
 
 **Order matters:** Push commit first, then tag. This ensures the commit exists on remote before the tag references it.

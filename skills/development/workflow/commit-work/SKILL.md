@@ -1,9 +1,9 @@
 ---
-name: commit
+name: commit-work
 description: Use when work is complete and ready to commit. Triggers after code review passes, when asked to "commit", "save this", or "wrap up". Runs quality checks, updates changelog, creates commit.
 ---
 
-# Commit
+# Commit Work
 
 Commit workflow that ensures quality gates pass and changelog is updated before committing.
 
@@ -45,13 +45,10 @@ Commit workflow that ensures quality gates pass and changelog is updated before 
 
 ## Step 1: Run Quality Checks
 
-Run in this order. Stop on first failure.
+Run in this order. Stop on first failure. Prefer the deterministic scripts in `scripts/`.
 
 ```bash
-ty                    # Type checking
-ruff check .          # Linting
-ruff format --check . # Format check
-pytest                # Tests
+scripts/run_quality_checks.sh
 ```
 
 **If any fail:** Fix the issue. Do not proceed to commit.
@@ -63,7 +60,11 @@ pytest                # Tests
 
 ## Step 2: Update CHANGELOG
 
-Create or update `CHANGELOG.md` in project root.
+Create or update `CHANGELOG.md` in project root. After editing, verify the `[Unreleased]` section has entries:
+
+```bash
+uv run python scripts/ensure_changelog_unreleased.py
+```
 
 **IMPORTANT:** Review ALL staged changes, not just the most recent work. The changelog entry must cover everything being committed. If multiple features, fixes, or changes are being committed together, document all of them.
 
@@ -118,7 +119,7 @@ EOF
 ## Step 4: Verify Success
 
 ```bash
-git status  # Should show clean working tree
+scripts/verify_clean_tree.sh
 git log -1  # Verify commit message looks correct
 ```
 

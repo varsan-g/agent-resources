@@ -16,7 +16,13 @@ Rigorous code review focused on quality, maintainability, and architectural soun
 
 ## Method
 
-Start by inspecting the changes. If on the `main` branch, review the staged git diff. If on a different branch, review committed and uncommitted changes compared to main.
+Start by inspecting the changes. Use the deterministic script to collect the review context:
+
+```bash
+scripts/collect_review_context.sh
+```
+
+If on the `main` branch, review the staged git diff. If on a different branch, review committed and uncommitted changes compared to main.
 
 Dispatch two subagents to carefully review the code changes. Tell them they're competing with another agent - whoever finds more legitimate issues wins honour and glory. Make sure they examine both architecture AND implementation, and check every criterion below.
 

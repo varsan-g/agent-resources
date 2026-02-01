@@ -1,12 +1,20 @@
 ---
 name: discover-outcomes
-description: Use when the user needs to define or refine desired outcomes and success metrics (e.g., for Opportunity Solution Trees or continuous discovery) before selecting opportunities or solutions.
+description: Use at the start of product strategy to define or refine desired outcomes and success metrics (e.g., for Opportunity Solution Trees or continuous discovery) before selecting opportunities or solutions.
 ---
 
 # Discover Outcomes
 
 ## Overview
 Define outcomes that describe measurable behavior change or business impact, not features. Build a clear outcome ladder so opportunity discovery and solution ideas have a shared target.
+
+## Position in Workflow
+
+Step 1 of product strategy workflow:
+1. `/discover-outcomes` - Define outcomes (THIS)
+2. `/discover-opportunities` - Identify opportunities
+3. `/ideate-solutions` - Explore solution concepts
+4. `/discover-assumptions` - Validate with experiments
 
 ## Inputs (ask if missing, max 5)
 - Business or product goal (north star)
@@ -65,7 +73,7 @@ Reduce [friction/cost/risk] for [actor] during [context] by [amount] within [tim
 - ...
 
 ### Next Step
-Proceed to opportunity discovery or assumption testing.
+Proceed to opportunity discovery. Run `/discover-opportunities`.
 ```
 
 ## Quick Reference

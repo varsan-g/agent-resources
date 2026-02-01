@@ -1,9 +1,6 @@
 ---
-name: research
-description: Research a task, problem, bug, or feature by exploring the codebase.
-  Use when starting new work, encountering bugs, or needing to understand how
-  existing implementation relates to a task. Triggers on "research", "investigate",
-  "look into", or requests to understand implementation before making changes.
+name: research-codebase
+description: Research a task, problem, bug, or feature by exploring the codebase. Use when starting new work, encountering bugs, or needing to understand how existing implementation relates to a task. Triggers on "research", "investigate", "look into", or requests to understand implementation before making changes.
 argument-hint: <task or problem description>
 ---
 
@@ -15,9 +12,10 @@ Understand a task and explore how the existing implementation relates to it.
 
 Step 1 of development workflow:
 1. `/research` - Understand problem, explore implementation (THIS)
-2. `/discover_solution_space` - Explore solutions
-3. Plan Mode - Create implementation plan
-4. Code, review, ship
+2. `/brainstorm-solutions` - Explore solutions
+3. `/design-solution` - Converge on a solution
+4. `/make-plan` - Create implementation plan
+5. Code, review, ship
 
 ## Core Principle
 
@@ -93,7 +91,7 @@ No saving unless explicitly requested.
 [What parts of the system this task would touch]
 
 ### Next Step
-Ready to explore solutions. Run `/discover_solution_space`
+Ready to explore solutions. Run `/brainstorm-solutions`
 
 ## What NOT to Do
 

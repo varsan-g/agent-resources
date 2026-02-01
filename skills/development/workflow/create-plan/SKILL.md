@@ -1,23 +1,20 @@
 ---
-name: make-plan
-description: Use when solution space exploration is complete and you're ready to create
-  an implementation plan. Enforces "simple over easy" - the fundamentally right solution,
-  not the path of least resistance. Triggers after /discover-solution-space, when
-  a solution has been chosen, or when asked to "make a plan" or "create a plan".
-argument-hint: <optional: solution choice or constraint>
+name: create-plan
+description: Use when solution space exploration is complete and you're ready to create an implementation plan. Enforces "simple over easy" - the fundamentally right solution, not the path of least resistance. Triggers after /design-solution, when a solution has been chosen, or when asked to "make a plan" or "create a plan".
 ---
 
-# Make Plan
+# Create Plan
 
 Create a comprehensive implementation plan and enter plan mode for execution.
 
 ## Position in Workflow
 
-Step 3 of development workflow:
+Step 4 of development workflow:
 1. `/research` - Understand problem, explore implementation
-2. `/discover-solution-space` - Explore solutions
-3. `/make-plan` - Create implementation plan (THIS)
-4. Code, review, ship
+2. `/brainstorm-solutions` - Explore solutions
+3. `/design-solution` - Converge on a solution
+4. `/make-plan` - Create implementation plan (THIS)
+5. Code, review, ship
 
 ## Core Principle
 
@@ -48,7 +45,7 @@ Before planning, confirm:
 - Solution space was explored
 - A solution has been chosen
 
-If missing context, ask: "I need [research/solution choice] before creating a plan. Should I run `/research` or `/discover-solution-space` first?"
+If missing context, ask: "I need [research/solution choice] before creating a plan. Should I run `/research` or `/design-solution` first?"
 
 ### 2. Specify Behavior Explicitly
 
@@ -166,7 +163,7 @@ Then use the `EnterPlanMode` tool.
 ## Implementation Plan: [Feature Name]
 
 ### Chosen Solution
-[Brief restatement of chosen approach from /discover-solution-space]
+[Brief restatement of chosen approach from /design-solution]
 
 ### Behavior Specification
 

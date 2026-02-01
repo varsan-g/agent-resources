@@ -1,12 +1,20 @@
 ---
 name: discover-opportunities
-description: Use when the user asks to discover opportunities, unmet needs, market gaps, or JTBD insights before choosing solutions, especially during product discovery, strategy, or problem framing.
+description: Use after outcomes are defined to discover opportunities, unmet needs, market gaps, or JTBD insights before choosing solutions.
 ---
 
 # Discover Opportunities
 
 ## Overview
 Find real opportunities by reasoning from first principles and Jobs-To-Be-Done (JTBD). Focus on the user's job, context, and constraints before any solution ideas.
+
+## Position in Workflow
+
+Step 2 of product strategy workflow:
+1. `/discover-outcomes` - Define outcomes
+2. `/discover-opportunities` - Identify opportunities (THIS)
+3. `/ideate-solutions` - Explore solution concepts
+4. `/discover-assumptions` - Validate with experiments
 
 ## Inputs (ask if missing, max 5)
 - Target user / segment
@@ -63,6 +71,9 @@ Help [segment] achieve [job outcome] by reducing [specific friction] in [context
 
 ### Fast Validation Tests
 - ...
+
+### Next Step
+Proceed to solution ideation. Run `/ideate-solutions`.
 ```
 
 ## Quick Reference
