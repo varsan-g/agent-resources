@@ -1,9 +1,9 @@
 ---
-name: skill-development
+name: refactor-for-determinism
 description: Design or refactor skills by separating deterministic and non-deterministic steps. Use when creating or improving skills, especially to move repeatable workflows into scripts/ and update SKILL.md to call them.
 ---
 
-# Skill Development
+# Refactor for Determinism
 
 Build reliable skills by separating deterministic steps from judgment-based steps.
 
