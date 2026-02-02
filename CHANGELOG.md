@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-02-02
+
 ### Added
 - **SDK module** for programmatic access to skills (`from agr import Skill, cache, list_skills, skill_info`)
 - `Skill.from_git(handle)` - Load skills from GitHub repositories with automatic caching
