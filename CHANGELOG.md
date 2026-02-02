@@ -2,7 +2,7 @@
 
 ## [Unreleased]
 
-## [0.8.0] - 2026-02-02
+## [0.7.2] - 2026-02-02
 
 ### Added
 - **SDK module** for programmatic access to skills (`from agr import Skill, cache, list_skills, skill_info`)
