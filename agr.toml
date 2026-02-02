@@ -18,6 +18,7 @@ dependencies = [
     {path = "./skills/skill-development/refactor-for-determinism", type = "skill"},
     {path = "./skills/development/workflow/research-codebase", type = "skill"},
     {path = "./skills/writing/skriv-som-kasper", type = "skill"},
+    {path = "skills/development/workflow/make-release", type = "skill"},
 ]
 
 [[source]]
