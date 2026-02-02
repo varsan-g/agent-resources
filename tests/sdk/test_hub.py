@@ -116,7 +116,9 @@ class TestGitHubApiRequest:
         from urllib.error import HTTPError
 
         mock_headers = MagicMock()
-        mock_urlopen.side_effect = HTTPError("url", 401, "Unauthorized", mock_headers, None)
+        mock_urlopen.side_effect = HTTPError(
+            "url", 401, "Unauthorized", mock_headers, None
+        )
 
         with pytest.raises(AuthenticationError):
             _github_api_request("https://api.github.com/test")
@@ -127,7 +129,9 @@ class TestGitHubApiRequest:
         from urllib.error import HTTPError
 
         mock_headers = MagicMock()
-        mock_urlopen.side_effect = HTTPError("url", 404, "Not Found", mock_headers, None)
+        mock_urlopen.side_effect = HTTPError(
+            "url", 404, "Not Found", mock_headers, None
+        )
 
         with pytest.raises(RepoNotFoundError):
             _github_api_request("https://api.github.com/test")
@@ -162,7 +166,9 @@ class TestRateLimitHandling:
         from urllib.error import HTTPError
 
         mock_headers = MagicMock()
-        mock_urlopen.side_effect = HTTPError("url", 429, "Too Many Requests", mock_headers, None)
+        mock_urlopen.side_effect = HTTPError(
+            "url", 429, "Too Many Requests", mock_headers, None
+        )
 
         with pytest.raises(RateLimitError, match="rate limit exceeded"):
             _github_api_request("https://api.github.com/test")
@@ -192,7 +198,9 @@ class TestRateLimitHandling:
         # No X-RateLimit-Remaining header or non-zero value
         mock_headers = MagicMock()
         mock_headers.get.return_value = ""  # Empty string, not "0"
-        mock_urlopen.side_effect = HTTPError("url", 403, "Forbidden", mock_headers, None)
+        mock_urlopen.side_effect = HTTPError(
+            "url", 403, "Forbidden", mock_headers, None
+        )
 
         with pytest.raises(AuthenticationError):
             _github_api_request("https://api.github.com/test")
