@@ -2,9 +2,22 @@
 
 ## [Unreleased]
 
+### Added
+- **SDK module** for programmatic access to skills (`from agr import Skill, cache, list_skills, skill_info`)
+- `Skill.from_git(handle)` - Load skills from GitHub repositories with automatic caching
+- `Skill.from_local(path)` - Load skills from local directories
+- `list_skills(repo)` - Discover skills in a GitHub repository
+- `skill_info(handle)` - Get metadata about a skill without downloading
+- `cache` manager for inspecting and clearing the skill cache
+- `SkillInfo` dataclass with name, handle, description, owner, and repo fields
+- `CacheError` and `RateLimitError` exception types
+- Path traversal protection in cache operations and `Skill.read_file()`
+- Atomic cache writes with file locking to prevent race conditions
+
 ### Changed
 - Remote skill fetching now resolves the default branch before cloning
 - agrx temporary installs use unique names and share the remote install helper
+- Root `agr` package now re-exports SDK types: `Skill`, `SkillInfo`, `cache`, `list_skills`, `skill_info`
 
 ### Fixed
 - Lint fixes in changelog workflow scripts

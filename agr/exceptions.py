@@ -27,3 +27,11 @@ class InvalidHandleError(AgrError):
 
 class InvalidLocalPathError(AgrError):
     """Raised when a local skill path is invalid."""
+
+
+class CacheError(AgrError):
+    """Raised when cache operations fail."""
+
+
+class RateLimitError(AgrError):
+    """Raised when GitHub API rate limit is exceeded."""
