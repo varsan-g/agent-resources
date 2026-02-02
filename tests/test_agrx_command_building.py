@@ -1,7 +1,7 @@
 """Tests for agrx command construction."""
 
 from agr.tool import CLAUDE, CODEX, COPILOT, CURSOR, OPENCODE
-from agrx.main import _build_skill_command
+from agrx.main import _build_skill_command, _build_temp_skill_name
 
 
 def test_build_skill_command_non_interactive_codex_exec():
@@ -26,6 +26,19 @@ def test_build_skill_command_non_interactive_cursor_flag():
     """Cursor non-interactive uses -p prompt flag."""
     cmd = _build_skill_command(CURSOR, "/skill prompt", non_interactive=True)
     assert cmd == ["agent", "-p", "/skill prompt"]
+
+
+def test_build_temp_skill_name_prefix_and_suffix():
+    """Temp skill name includes prefix, name, and unique suffix."""
+    temp_name = _build_temp_skill_name("my-skill")
+    assert temp_name.startswith("_agrx_my-skill-")
+
+
+def test_build_temp_skill_name_unique():
+    """Temp skill names are unique across calls."""
+    first = _build_temp_skill_name("my-skill")
+    second = _build_temp_skill_name("my-skill")
+    assert first != second
 
 
 def test_build_skill_command_non_interactive_opencode_run():

@@ -159,6 +159,34 @@ def _is_github_source(source: SourceConfig) -> bool:
     return "github.com" in source.url.lower()
 
 
+def _get_default_branch(repo_url: str) -> str | None:
+    """Return the default branch name for a remote repo, if detectable."""
+    try:
+        result = subprocess.run(
+            ["git", "ls-remote", "--symref", repo_url, "HEAD"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+    except OSError as e:
+        raise AgrError(f"Failed to run git: {type(e).__name__}") from None
+
+    if result.returncode != 0:
+        return None
+
+    # Expected: "ref: refs/heads/main\tHEAD"
+    for line in result.stdout.splitlines():
+        if not line.startswith("ref:"):
+            continue
+        parts = line.split()
+        if len(parts) < 2:
+            continue
+        ref = parts[1]
+        if ref.startswith("refs/heads/"):
+            return ref.replace("refs/heads/", "", 1)
+    return None
+
+
 @contextmanager
 def downloaded_repo(
     source: SourceConfig, owner: str, repo_name: str
@@ -183,15 +211,18 @@ def downloaded_repo(
 
     repo_url = source.build_repo_url(owner, repo_name)
     repo_url = _apply_github_token(repo_url)
+    default_branch = _get_default_branch(repo_url)
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         tmp_path = Path(tmp_dir)
         repo_dir = tmp_path / "repo"
 
-        result = _clone_repo(repo_url, repo_dir, partial=True)
+        result = _clone_repo(repo_url, repo_dir, partial=True, branch=default_branch)
         if result.returncode != 0 and _partial_clone_unsupported(result.stderr):
             _reset_repo_dir(repo_dir)
-            result = _clone_repo(repo_url, repo_dir, partial=False)
+            result = _clone_repo(
+                repo_url, repo_dir, partial=False, branch=default_branch
+            )
 
         if result.returncode != 0:
             _raise_clone_error(
@@ -232,7 +263,7 @@ def _apply_github_token(repo_url: str) -> str:
 
 
 def _clone_repo(
-    repo_url: str, repo_dir: Path, partial: bool
+    repo_url: str, repo_dir: Path, partial: bool, branch: str | None
 ) -> subprocess.CompletedProcess:
     """Clone a repository using git, optionally with partial clone flags."""
     cmd = [
@@ -240,10 +271,10 @@ def _clone_repo(
         "clone",
         "--depth",
         "1",
-        "--branch",
-        "main",
         "--single-branch",
     ]
+    if branch:
+        cmd.extend(["--branch", branch])
     if partial:
         cmd.extend(["--filter=blob:none", "--no-checkout"])
     cmd.extend([repo_url, str(repo_dir)])
@@ -675,6 +706,61 @@ def install_local_skill(
     )
 
 
+def install_remote_skill(
+    handle: ParsedHandle,
+    repo_root: Path | None,
+    tool: ToolConfig,
+    skills_dir: Path,
+    *,
+    overwrite: bool = False,
+    resolver: SourceResolver | None = None,
+    source: str | None = None,
+    install_name: str | None = None,
+) -> Path:
+    """Install a remote skill to a specific tool directory."""
+    if handle.is_local:
+        raise ValueError("install_remote_skill requires a remote handle")
+
+    resolver = resolver or SourceResolver(default_sources(), DEFAULT_SOURCE_NAME)
+    owner, repo_name = handle.get_github_repo()
+
+    for source_config in resolver.ordered(source):
+        try:
+            with downloaded_repo(source_config, owner, repo_name) as repo_dir:
+                skill_source = prepare_repo_for_skill(repo_dir, handle.name)
+                if skill_source is None:
+                    continue
+                install_handle = (
+                    ParsedHandle(
+                        username=handle.username,
+                        repo=handle.repo,
+                        name=install_name,
+                    )
+                    if install_name
+                    else handle
+                )
+                return install_skill_from_repo(
+                    repo_dir,
+                    handle.name,
+                    install_handle,
+                    skills_dir,
+                    tool,
+                    repo_root,
+                    overwrite,
+                    install_source=source_config.name,
+                    skill_source=skill_source,
+                )
+        except RepoNotFoundError:
+            if source is not None:
+                raise
+            continue
+
+    raise SkillNotFoundError(
+        f"Skill '{handle.name}' not found in sources: "
+        f"{', '.join(s.name for s in resolver.ordered(source))}"
+    )
+
+
 def fetch_and_install(
     handle: ParsedHandle,
     repo_root: Path,
@@ -713,34 +799,14 @@ def fetch_and_install(
         )
 
     # Remote skill installation
-    resolver = resolver or SourceResolver(default_sources(), DEFAULT_SOURCE_NAME)
-    owner, repo_name = handle.get_github_repo()
-
-    for source_config in resolver.ordered(source):
-        try:
-            with downloaded_repo(source_config, owner, repo_name) as repo_dir:
-                skill_source = prepare_repo_for_skill(repo_dir, handle.name)
-                if skill_source is None:
-                    continue
-                return install_skill_from_repo(
-                    repo_dir,
-                    handle.name,
-                    handle,
-                    skills_dir,
-                    tool,
-                    repo_root,
-                    overwrite,
-                    install_source=source_config.name,
-                    skill_source=skill_source,
-                )
-        except RepoNotFoundError:
-            if source is not None:
-                raise
-            continue
-
-    raise SkillNotFoundError(
-        f"Skill '{handle.name}' not found in sources: "
-        f"{', '.join(s.name for s in resolver.ordered(source))}"
+    return install_remote_skill(
+        handle,
+        repo_root,
+        tool,
+        skills_dir,
+        overwrite=overwrite,
+        resolver=resolver,
+        source=source,
     )
 
 

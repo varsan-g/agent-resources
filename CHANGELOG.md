@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+### Changed
+- Remote skill fetching now resolves the default branch before cloning
+- agrx temporary installs use unique names and share the remote install helper
+
+### Fixed
+- Lint fixes in changelog workflow scripts
+
 ## [0.7.2b3] - 2026-01-31
 
 ### Added

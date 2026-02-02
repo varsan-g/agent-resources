@@ -4,6 +4,7 @@ import shutil
 import signal
 import subprocess
 import sys
+import uuid
 from pathlib import Path
 from typing import Annotated, Optional
 
@@ -11,14 +12,9 @@ import typer
 from rich.console import Console
 
 from agr.config import AgrConfig, find_config, find_repo_root
-from agr.exceptions import (
-    AgrError,
-    InvalidHandleError,
-    RepoNotFoundError,
-    SkillNotFoundError,
-)
-from agr.fetcher import downloaded_repo, install_skill_from_repo, prepare_repo_for_skill
-from agr.handle import ParsedHandle, parse_handle
+from agr.exceptions import AgrError, InvalidHandleError
+from agr.fetcher import install_remote_skill
+from agr.handle import parse_handle
 from agr.tool import DEFAULT_TOOL_NAMES, TOOLS, ToolConfig, get_tool
 
 app = typer.Typer(
@@ -31,6 +27,7 @@ app = typer.Typer(
 console = Console()
 
 AGRX_PREFIX = "_agrx_"  # Prefix for temporary resources
+AGRX_SUFFIX_LEN = 8
 
 
 def _get_default_tool() -> str:
@@ -208,46 +205,19 @@ def main(
         console.print(f"[dim]Downloading {handle}...[/dim]")
 
         # Create prefixed name for temporary skill
-        prefixed_name = f"{AGRX_PREFIX}{parsed.name}"
+        prefixed_name = _build_temp_skill_name(parsed.name)
 
         # Download and install
-        owner, repo_name = parsed.get_github_repo()
-        installed_path = None
-        for source_config in resolver.ordered(source):
-            try:
-                with downloaded_repo(source_config, owner, repo_name) as repo_dir:
-                    skill_source = prepare_repo_for_skill(repo_dir, parsed.name)
-                    if skill_source is None:
-                        continue
-                    # Create a modified handle for the prefixed installation
-                    temp_handle = ParsedHandle(
-                        username=parsed.username,
-                        repo=parsed.repo,
-                        name=prefixed_name,
-                    )
-
-                    installed_path = install_skill_from_repo(
-                        repo_dir,
-                        parsed.name,
-                        temp_handle,
-                        skills_dir,
-                        tool_config,
-                        repo_root,
-                        overwrite=True,
-                        install_source=source_config.name,
-                        skill_source=skill_source,
-                    )
-                    break
-            except RepoNotFoundError:
-                if source is not None:
-                    raise
-                continue
-
-        if installed_path is None:
-            raise SkillNotFoundError(
-                f"Skill '{parsed.name}' not found in sources: "
-                f"{', '.join(s.name for s in resolver.ordered(source))}"
-            )
+        installed_path = install_remote_skill(
+            parsed,
+            repo_root,
+            tool_config,
+            skills_dir,
+            overwrite=False,
+            resolver=resolver,
+            source=source,
+            install_name=prefixed_name,
+        )
 
         # For consistency, update temp_skill_path to match
         temp_skill_path = installed_path
@@ -333,3 +303,9 @@ def main(
 
 if __name__ == "__main__":
     app()
+
+
+def _build_temp_skill_name(skill_name: str) -> str:
+    """Build a unique temp skill name to avoid collisions."""
+    suffix = uuid.uuid4().hex[:AGRX_SUFFIX_LEN]
+    return f"{AGRX_PREFIX}{skill_name}-{suffix}"

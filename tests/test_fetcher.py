@@ -78,6 +78,10 @@ class TestDownloadedRepoE2E:
         monkeypatch.setattr(shutil, "which", lambda _: "/usr/bin/git")
 
         def fake_run(cmd, capture_output, text, check):
+            if cmd[:2] == ["git", "ls-remote"]:
+                return subprocess.CompletedProcess(
+                    cmd, 0, "ref: refs/heads/main\tHEAD\n", ""
+                )
             repo_path = Path(cmd[-1])
             repo_path.mkdir(parents=True, exist_ok=True)
             return subprocess.CompletedProcess(cmd, 0, "", "")
@@ -92,6 +96,36 @@ class TestDownloadedRepoE2E:
         with downloaded_repo(source, "user", "repo") as repo_dir:
             assert repo_dir.exists()
 
+    def test_git_clone_uses_default_branch(self, monkeypatch):
+        """Clone uses the detected default branch when available."""
+        monkeypatch.setattr(shutil, "which", lambda _: "/usr/bin/git")
+        calls: list[list[str]] = []
+
+        def fake_run(cmd, capture_output, text, check):
+            calls.append(cmd)
+            if cmd[:2] == ["git", "ls-remote"]:
+                return subprocess.CompletedProcess(
+                    cmd, 0, "ref: refs/heads/master\tHEAD\n", ""
+                )
+            repo_path = Path(cmd[-1])
+            repo_path.mkdir(parents=True, exist_ok=True)
+            return subprocess.CompletedProcess(cmd, 0, "", "")
+
+        monkeypatch.setattr(subprocess, "run", fake_run)
+
+        source = SourceConfig(
+            name="github",
+            type="git",
+            url="https://github.com/{owner}/{repo}.git",
+        )
+        with downloaded_repo(source, "user", "repo") as repo_dir:
+            assert repo_dir.exists()
+
+        clone_calls = [call for call in calls if call[:2] == ["git", "clone"]]
+        assert clone_calls, "Expected a git clone call"
+        assert "--branch" in clone_calls[0]
+        assert "master" in clone_calls[0]
+
     def test_git_clone_falls_back_when_partial_unsupported(self, monkeypatch):
         """Fallback to full clone when partial clone is unsupported."""
         monkeypatch.setattr(shutil, "which", lambda _: "/usr/bin/git")
@@ -99,6 +133,10 @@ class TestDownloadedRepoE2E:
 
         def fake_run(cmd, capture_output, text, check):
             calls.append(cmd)
+            if cmd[:2] == ["git", "ls-remote"]:
+                return subprocess.CompletedProcess(
+                    cmd, 0, "ref: refs/heads/main\tHEAD\n", ""
+                )
             repo_path = Path(cmd[-1])
             if "--filter=blob:none" in cmd:
                 return subprocess.CompletedProcess(
@@ -117,9 +155,10 @@ class TestDownloadedRepoE2E:
         with downloaded_repo(source, "user", "repo") as repo_dir:
             assert repo_dir.exists()
 
-        assert len(calls) == 2
-        assert "--filter=blob:none" in calls[0]
-        assert "--filter=blob:none" not in calls[1]
+        assert len(calls) == 3
+        assert calls[0][:2] == ["git", "ls-remote"]
+        assert "--filter=blob:none" in calls[1]
+        assert "--filter=blob:none" not in calls[2]
 
     def test_git_clone_not_found(self, monkeypatch):
         """Repository not found errors are classified."""

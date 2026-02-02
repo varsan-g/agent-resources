@@ -38,13 +38,13 @@ def main() -> int:
     replace_in_file(
         init_path,
         re.compile(r"^__version__\s*=\s*\"[^\"]+\"", re.MULTILINE),
-        f"__version__ = \"{version}\"",
+        f'__version__ = "{version}"',
     )
 
     replace_in_file(
         pyproject_path,
         re.compile(r"^version\s*=\s*\"[^\"]+\"", re.MULTILINE),
-        f"version = \"{version}\"",
+        f'version = "{version}"',
     )
 
     return 0

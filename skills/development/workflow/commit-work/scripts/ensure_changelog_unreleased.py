@@ -26,9 +26,12 @@ def main() -> int:
             break
         content_lines.append(line)
 
-    has_bullets = any(l.strip().startswith(('- ', '* ')) for l in content_lines)
+    has_bullets = any(line.strip().startswith(("- ", "* ")) for line in content_lines)
     if not has_bullets:
-        print("'## [Unreleased]' has no bullet entries. Add changes before committing.", file=sys.stderr)
+        print(
+            "'## [Unreleased]' has no bullet entries. Add changes before committing.",
+            file=sys.stderr,
+        )
         return 1
 
     return 0
