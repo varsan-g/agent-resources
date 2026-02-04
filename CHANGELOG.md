@@ -2,11 +2,13 @@
 
 ## [Unreleased]
 
+## [0.7.3] - 2026-02-04
 ### Changed
 - Owner-only handles now default to the `skills` repo with a warning-backed fallback to `agent-resources`
 
 ### Fixed
 - `agr sync` now respects per-dependency sources for owner-only handles
+
 
 ## [0.7.2] - 2026-02-02
 

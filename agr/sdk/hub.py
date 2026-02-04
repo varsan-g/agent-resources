@@ -163,9 +163,7 @@ def list_skills(repo_handle: str) -> list[SkillInfo]:
     last_error: Exception | None = None
     for repo_name, is_legacy in repo_candidates:
         # Get repository tree
-        tree_url = (
-            f"https://api.github.com/repos/{owner}/{repo_name}/git/trees/HEAD?recursive=1"
-        )
+        tree_url = f"https://api.github.com/repos/{owner}/{repo_name}/git/trees/HEAD?recursive=1"
         try:
             tree_data = _github_api_request(tree_url)
             repo = repo_name
@@ -263,9 +261,7 @@ def skill_info(handle: str) -> SkillInfo:
     used_legacy = False
     last_error: Exception | None = None
     for repo_name, is_legacy in repo_candidates:
-        tree_url = (
-            f"https://api.github.com/repos/{owner}/{repo_name}/git/trees/HEAD?recursive=1"
-        )
+        tree_url = f"https://api.github.com/repos/{owner}/{repo_name}/git/trees/HEAD?recursive=1"
         try:
             tree_data = _github_api_request(tree_url)
             repo = repo_name
@@ -299,9 +295,7 @@ def skill_info(handle: str) -> SkillInfo:
         # Try legacy repo if skill not found in default repo
         if repo != LEGACY_DEFAULT_REPO_NAME:
             try:
-                legacy_tree_url = (
-                    f"https://api.github.com/repos/{owner}/{LEGACY_DEFAULT_REPO_NAME}/git/trees/HEAD?recursive=1"
-                )
+                legacy_tree_url = f"https://api.github.com/repos/{owner}/{LEGACY_DEFAULT_REPO_NAME}/git/trees/HEAD?recursive=1"
                 legacy_tree = _github_api_request(legacy_tree_url)
                 for item in legacy_tree.get("tree", []):
                     if item.get("type") != "blob":
@@ -325,7 +319,9 @@ def skill_info(handle: str) -> SkillInfo:
         )
 
     # Fetch SKILL.md content
-    content_url = f"https://api.github.com/repos/{owner}/{repo}/contents/{skill_md_path}"
+    content_url = (
+        f"https://api.github.com/repos/{owner}/{repo}/contents/{skill_md_path}"
+    )
     content_data = _github_api_request(content_url)
 
     description = None

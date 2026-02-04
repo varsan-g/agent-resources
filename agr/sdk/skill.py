@@ -121,7 +121,7 @@ class Skill:
                     # Get commit hash for cache key
                     commit = _get_head_commit(repo_dir)
 
-                # Check cache
+                    # Check cache
                     if not force_download and is_cached(
                         owner, repo_name, parsed.name, commit
                     ):
@@ -145,7 +145,7 @@ class Skill:
                             revision=commit,
                         )
 
-                # Find and checkout skill
+                    # Find and checkout skill
                     skill_path = prepare_repo_for_skill(repo_dir, parsed.name)
                     if skill_path is None:
                         last_error = SkillNotFoundError(
@@ -153,7 +153,7 @@ class Skill:
                         )
                         continue
 
-                # Cache the skill
+                    # Cache the skill
                     cached_path = cache_skill(
                         skill_path, owner, repo_name, parsed.name, commit
                     )
