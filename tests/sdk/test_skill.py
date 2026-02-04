@@ -5,7 +5,12 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from agr.exceptions import InvalidHandleError, InvalidLocalPathError, SkillNotFoundError
+from agr.exceptions import (
+    InvalidHandleError,
+    InvalidLocalPathError,
+    RepoNotFoundError,
+    SkillNotFoundError,
+)
 from agr.sdk.skill import Skill, _get_head_commit
 
 
@@ -268,6 +273,17 @@ class TestSkillFromGit:
 
         with pytest.raises(SkillNotFoundError):
             Skill.from_git("testuser/nonexistent")
+
+    @patch("agr.sdk.skill.downloaded_repo")
+    def test_from_git_repo_not_found(self, mock_download: MagicMock):
+        """Test that from_git raises when repo candidates are missing."""
+        mock_download.side_effect = [
+            RepoNotFoundError("missing skills"),
+            RepoNotFoundError("missing legacy"),
+        ]
+
+        with pytest.raises(RepoNotFoundError):
+            Skill.from_git("testuser/test-skill")
 
 
 class TestGetHeadCommit:

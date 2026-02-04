@@ -1,5 +1,5 @@
 default_source = "github"
-tools = ["claude", "codex"]
+tools = ["claude", "codex", "opencode"]
 dependencies = [
     {path = "./skills/development/workflow/brainstorm-solutions", type = "skill"},
     {path = "./skills/development/workflow/code-review", type = "skill"},

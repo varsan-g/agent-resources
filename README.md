@@ -63,10 +63,14 @@ Remote installs require `git` to be available on your system.
 ### Handle format
 
 ```
-username/skill-name         → From user's agent-resources repo
+username/skill-name         → From user's skills repo
 username/repo/skill-name    → From a specific repo
 ./path/to/skill             → From local directory
 ```
+
+Note: `username/skill-name` now defaults to a repo named `skills`. During a
+deprecation period, agr will fall back to `agent-resources` (with a warning) if
+the skill isn't found in `skills`.
 
 ---
 

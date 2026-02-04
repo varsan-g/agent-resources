@@ -28,6 +28,25 @@ INSTALLED_NAME_SEPARATOR = "--"
 LOCAL_PREFIX = "local"
 # Legacy separator (colon) for backward compatibility during migration
 LEGACY_SEPARATOR = ":"
+DEFAULT_REPO_NAME = "skills"
+LEGACY_DEFAULT_REPO_NAME = "agent-resources"
+
+
+def iter_repo_candidates(repo: str | None) -> list[tuple[str, bool]]:
+    """Return repo candidates for owner-only handles.
+
+    Args:
+        repo: Explicit repo name or None for defaults.
+
+    Returns:
+        List of (repo_name, is_legacy) candidates in priority order.
+    """
+    if repo:
+        return [(repo, False)]
+    return [
+        (DEFAULT_REPO_NAME, False),
+        (LEGACY_DEFAULT_REPO_NAME, True),
+    ]
 
 
 @dataclass
@@ -35,7 +54,7 @@ class ParsedHandle:
     """Parsed resource handle."""
 
     username: str | None = None  # GitHub username, None for local
-    repo: str | None = None  # Repository name, None = default (agent-resources)
+    repo: str | None = None  # Repository name, None = default (skills)
     name: str = ""  # Skill name (final segment)
     is_local: bool = False  # True for local path references
     local_path: Path | None = None  # Original local path if is_local
@@ -86,7 +105,7 @@ class ParsedHandle:
         """Get (owner, repo_name) for git download.
 
         Returns:
-            Tuple of (owner, repo_name). repo_name defaults to "agent-resources".
+            Tuple of (owner, repo_name). repo_name defaults to "skills".
 
         Raises:
             InvalidHandleError: If this is a local handle.
@@ -95,7 +114,7 @@ class ParsedHandle:
             raise InvalidHandleError("Cannot get GitHub repo for local handle")
         if not self.username:
             raise InvalidHandleError("No username in handle")
-        return (self.username, self.repo or "agent-resources")
+        return (self.username, self.repo or DEFAULT_REPO_NAME)
 
     def to_skill_path(self, tool: "ToolConfig") -> Path:
         """Get default skill installation path based on tool capabilities.

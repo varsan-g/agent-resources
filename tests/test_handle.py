@@ -4,7 +4,10 @@ import pytest
 
 from agr.exceptions import InvalidHandleError
 from agr.handle import (
+    DEFAULT_REPO_NAME,
+    LEGACY_DEFAULT_REPO_NAME,
     ParsedHandle,
+    iter_repo_candidates,
     installed_name_to_toml_handle,
     parse_handle,
 )
@@ -162,7 +165,7 @@ class TestParsedHandle:
         h = ParsedHandle(username="kasperjunge", name="commit")
         user, repo = h.get_github_repo()
         assert user == "kasperjunge"
-        assert repo == "agent-resources"
+        assert repo == "skills"
 
     def test_get_github_repo_explicit(self):
         """get_github_repo with explicit repo."""
@@ -218,3 +221,18 @@ class TestInstalledNameToTomlHandle:
     def test_legacy_colon_local(self):
         """Backward compatibility: colon format still parses (local:skill)."""
         assert installed_name_to_toml_handle("local:my-skill") == "my-skill"
+
+
+class TestRepoCandidates:
+    """Tests for iter_repo_candidates function."""
+
+    def test_default_candidates(self):
+        """Owner-only handles try skills then legacy repo."""
+        assert iter_repo_candidates(None) == [
+            (DEFAULT_REPO_NAME, False),
+            (LEGACY_DEFAULT_REPO_NAME, True),
+        ]
+
+    def test_explicit_repo(self):
+        """Explicit repo does not include legacy fallback."""
+        assert iter_repo_candidates("custom") == [("custom", False)]

@@ -98,17 +98,21 @@ agrx kasperjunge/migrate-to-skills
 ## Handle Format
 
 ```bash
-agr add user/skill              # From user's "agent-resources" repo
+agr add user/skill              # From user's "skills" repo
 agr add user/repo/skill         # From a different repo
 agr add ./path/to/skill         # Local path
 ```
 
-If a user's repo is named `agent-resources`, you can skip the repo name:
+If a user's repo is named `skills`, you can skip the repo name:
 
 ```bash
-agr add kasperjunge/commit                    # From kasperjunge/agent-resources
-agr add kasperjunge/agent-resources/commit    # Same thing (explicit)
+agr add kasperjunge/commit                    # From kasperjunge/skills
+agr add kasperjunge/skills/commit             # Same thing (explicit)
 ```
+
+Note: `user/skill` now defaults to `skills`. During a deprecation period, agr
+will fall back to `agent-resources` (with a warning) if the skill isn't found in
+`skills`.
 
 ## How Skill Discovery Works
 

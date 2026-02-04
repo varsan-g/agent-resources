@@ -353,7 +353,37 @@ def run_sync() -> None:
                 tools_needing_install,
                 overwrite=False,
                 resolver=resolver,
-                source=None,
+                source=entry.source_name,
+            )
+            results[entry.index] = ("installed", None)
+        except FileExistsError as e:
+            results[entry.index] = ("error", str(e))
+        except AgrError as e:
+            results[entry.index] = ("error", str(e))
+        except Exception as e:
+            results[entry.index] = ("error", f"Unexpected: {e}")
+
+    pending_remote_default = [e for e in pending_remote if e.handle.repo is None]
+    pending_remote_specific = [e for e in pending_remote if e.handle.repo is not None]
+
+    for entry in pending_remote_default:
+        handle = entry.handle
+        tools_needing_install = [
+            tool
+            for tool in tools
+            if not is_skill_installed(handle, repo_root, tool, entry.source_name)
+        ]
+        if not tools_needing_install:
+            results[entry.index] = ("up-to-date", None)
+            continue
+        try:
+            fetch_and_install_to_tools(
+                handle,
+                repo_root,
+                tools_needing_install,
+                overwrite=False,
+                resolver=resolver,
+                source=entry.source_name,
             )
             results[entry.index] = ("installed", None)
         except FileExistsError as e:
@@ -365,7 +395,7 @@ def run_sync() -> None:
 
     # Remote installs grouped by repo/source (download once per repo)
     grouped: dict[tuple[str, str, str], list[SyncEntry]] = {}
-    for entry in pending_remote:
+    for entry in pending_remote_specific:
         handle = entry.handle
         source_name = entry.source_name or config.default_source
         owner, repo_name = handle.get_github_repo()

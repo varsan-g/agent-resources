@@ -3,12 +3,18 @@
 import hashlib
 import subprocess
 import time
+import warnings
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from agr.exceptions import InvalidHandleError, InvalidLocalPathError, SkillNotFoundError
+from agr.exceptions import (
+    InvalidHandleError,
+    InvalidLocalPathError,
+    RepoNotFoundError,
+    SkillNotFoundError,
+)
 from agr.fetcher import downloaded_repo, prepare_repo_for_skill
-from agr.handle import ParsedHandle, parse_handle
+from agr.handle import ParsedHandle, iter_repo_candidates, parse_handle
 from agr.sdk.cache import cache_skill, get_skill_cache_path, is_cached
 from agr.skill import SKILL_MARKER, is_valid_skill_dir
 from agr.source import SourceConfig, default_sources
@@ -93,7 +99,8 @@ class Skill:
                 f"'{handle}' is a local path. Use Skill.from_local() instead."
             )
 
-        owner, repo_name = parsed.get_github_repo()
+        owner = parsed.username or ""
+        repo_candidates = iter_repo_candidates(parsed.repo)
 
         # Get default source
         sources = default_sources()
@@ -106,40 +113,82 @@ class Skill:
         )
 
         # Download and cache
-        with downloaded_repo(source_config, owner, repo_name) as repo_dir:
-            # Get commit hash for cache key
-            commit = _get_head_commit(repo_dir)
+        last_error: SkillNotFoundError | None = None
+        last_repo_error: RepoNotFoundError | None = None
+        for repo_name, is_legacy in repo_candidates:
+            try:
+                with downloaded_repo(source_config, owner, repo_name) as repo_dir:
+                    # Get commit hash for cache key
+                    commit = _get_head_commit(repo_dir)
 
-            # Check cache
-            if not force_download and is_cached(owner, repo_name, parsed.name, commit):
-                cached_path = get_skill_cache_path(
-                    owner, repo_name, parsed.name, commit
-                )
-                return cls(
-                    name=parsed.name,
-                    path=cached_path,
-                    handle=parsed,
-                    source=source_config.name,
-                    revision=commit,
-                )
+                # Check cache
+                    if not force_download and is_cached(
+                        owner, repo_name, parsed.name, commit
+                    ):
+                        cached_path = get_skill_cache_path(
+                            owner, repo_name, parsed.name, commit
+                        )
+                        if is_legacy:
+                            warnings.warn(
+                                "Deprecated: owner-only handles now default to the 'skills' "
+                                "repo. Falling back to the legacy 'agent-resources' repo. "
+                                "Use an explicit handle like 'owner/agent-resources/skill' "
+                                "or move/rename your repo to 'skills'.",
+                                UserWarning,
+                                stacklevel=2,
+                            )
+                        return cls(
+                            name=parsed.name,
+                            path=cached_path,
+                            handle=parsed,
+                            source=source_config.name,
+                            revision=commit,
+                        )
 
-            # Find and checkout skill
-            skill_path = prepare_repo_for_skill(repo_dir, parsed.name)
-            if skill_path is None:
-                raise SkillNotFoundError(
-                    f"Skill '{parsed.name}' not found in repository '{owner}/{repo_name}'."
-                )
+                # Find and checkout skill
+                    skill_path = prepare_repo_for_skill(repo_dir, parsed.name)
+                    if skill_path is None:
+                        last_error = SkillNotFoundError(
+                            f"Skill '{parsed.name}' not found in repository '{owner}/{repo_name}'."
+                        )
+                        continue
 
-            # Cache the skill
-            cached_path = cache_skill(skill_path, owner, repo_name, parsed.name, commit)
+                # Cache the skill
+                    cached_path = cache_skill(
+                        skill_path, owner, repo_name, parsed.name, commit
+                    )
 
-            return cls(
-                name=parsed.name,
-                path=cached_path,
-                handle=parsed,
-                source=source_config.name,
-                revision=commit,
-            )
+                    if is_legacy:
+                        warnings.warn(
+                            "Deprecated: owner-only handles now default to the 'skills' "
+                            "repo. Falling back to the legacy 'agent-resources' repo. "
+                            "Use an explicit handle like 'owner/agent-resources/skill' "
+                            "or move/rename your repo to 'skills'.",
+                            UserWarning,
+                            stacklevel=2,
+                        )
+
+                    return cls(
+                        name=parsed.name,
+                        path=cached_path,
+                        handle=parsed,
+                        source=source_config.name,
+                        revision=commit,
+                    )
+            except SkillNotFoundError as exc:
+                last_error = exc
+                continue
+            except RepoNotFoundError as exc:
+                last_repo_error = exc
+                continue
+
+        if last_error:
+            raise last_error
+        if last_repo_error:
+            raise last_repo_error
+        raise SkillNotFoundError(
+            f"Skill '{parsed.name}' not found in repository '{owner}/{repo_candidates[0][0]}'."
+        )
 
     @classmethod
     def from_local(cls, path: str | Path) -> "Skill":

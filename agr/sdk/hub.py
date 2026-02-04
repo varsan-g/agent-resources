@@ -13,12 +13,23 @@ from agr.exceptions import (
     RepoNotFoundError,
     SkillNotFoundError,
 )
-from agr.handle import parse_handle
+import warnings
+
+from agr.handle import (
+    DEFAULT_REPO_NAME,
+    LEGACY_DEFAULT_REPO_NAME,
+    iter_repo_candidates,
+    parse_handle,
+)
 from agr.sdk.types import SkillInfo
 from agr.skill import SKILL_MARKER
 
-# Default repository name for owner-only handles
-DEFAULT_REPO_NAME = "agent-resources"
+DEPRECATION_MESSAGE = (
+    "Deprecated: owner-only handles now default to the 'skills' repo. "
+    "Falling back to the legacy 'agent-resources' repo. "
+    "Use an explicit handle like '{owner}/{repo}/{name}' "
+    "or move/rename your repo to 'skills'."
+)
 
 
 def _get_github_token() -> str | None:
@@ -139,15 +150,35 @@ def list_skills(repo_handle: str) -> list[SkillInfo]:
     parts = repo_handle.split("/")
     if len(parts) == 1:
         owner = parts[0]
-        repo = DEFAULT_REPO_NAME
+        repo_candidates = iter_repo_candidates(None)
     elif len(parts) == 2:
         owner, repo = parts
+        repo_candidates = [(repo, False)]
     else:
         raise ValueError(f"Invalid repo handle: {repo_handle}")
 
-    # Get repository tree
-    tree_url = f"https://api.github.com/repos/{owner}/{repo}/git/trees/HEAD?recursive=1"
-    tree_data = _github_api_request(tree_url)
+    tree_data = None
+    repo = None
+    used_legacy = False
+    last_error: Exception | None = None
+    for repo_name, is_legacy in repo_candidates:
+        # Get repository tree
+        tree_url = (
+            f"https://api.github.com/repos/{owner}/{repo_name}/git/trees/HEAD?recursive=1"
+        )
+        try:
+            tree_data = _github_api_request(tree_url)
+            repo = repo_name
+            used_legacy = is_legacy
+            break
+        except RepoNotFoundError as e:
+            last_error = e
+            continue
+
+    if tree_data is None or repo is None:
+        if last_error:
+            raise last_error
+        raise RepoNotFoundError(f"Repository not found: {repo_handle}")
 
     # Find SKILL.md files
     skill_dirs: dict[str, str] = {}  # name -> path
@@ -168,6 +199,15 @@ def list_skills(repo_handle: str) -> list[SkillInfo]:
 
     # Build SkillInfo objects
     skills = []
+    if used_legacy:
+        warnings.warn(
+            DEPRECATION_MESSAGE.format(
+                owner=owner, repo=LEGACY_DEFAULT_REPO_NAME, name="skill-name"
+            ),
+            UserWarning,
+            stacklevel=2,
+        )
+
     for name, path in sorted(skill_dirs.items()):
         # Construct handle
         if repo == DEFAULT_REPO_NAME:
@@ -215,16 +255,32 @@ def skill_info(handle: str) -> SkillInfo:
     if parsed.is_local:
         raise InvalidHandleError(f"'{handle}' is a local path, not a remote handle")
 
-    owner, repo = parsed.get_github_repo()
+    owner, initial_repo = parsed.get_github_repo()
+    repo_candidates = iter_repo_candidates(parsed.repo)
 
-    # Try to fetch SKILL.md content
-    # First, find the skill in the tree
-    tree_url = f"https://api.github.com/repos/{owner}/{repo}/git/trees/HEAD?recursive=1"
+    tree_data = None
+    repo = None
+    used_legacy = False
+    last_error: Exception | None = None
+    for repo_name, is_legacy in repo_candidates:
+        tree_url = (
+            f"https://api.github.com/repos/{owner}/{repo_name}/git/trees/HEAD?recursive=1"
+        )
+        try:
+            tree_data = _github_api_request(tree_url)
+            repo = repo_name
+            used_legacy = is_legacy
+            break
+        except RepoNotFoundError as e:
+            last_error = e
+            continue
 
-    try:
-        tree_data = _github_api_request(tree_url)
-    except RepoNotFoundError:
-        raise SkillNotFoundError(f"Repository '{owner}/{repo}' not found") from None
+    if tree_data is None or repo is None:
+        if last_error:
+            raise SkillNotFoundError(
+                f"Repository '{owner}/{initial_repo}' not found"
+            ) from None
+        raise SkillNotFoundError(f"Repository '{owner}/{initial_repo}' not found")
 
     # Find SKILL.md for this skill
     skill_md_path = None
@@ -239,15 +295,37 @@ def skill_info(handle: str) -> SkillInfo:
             skill_md_path = path
             break
 
+    if skill_md_path is None and parsed.repo is None:
+        # Try legacy repo if skill not found in default repo
+        if repo != LEGACY_DEFAULT_REPO_NAME:
+            try:
+                legacy_tree_url = (
+                    f"https://api.github.com/repos/{owner}/{LEGACY_DEFAULT_REPO_NAME}/git/trees/HEAD?recursive=1"
+                )
+                legacy_tree = _github_api_request(legacy_tree_url)
+                for item in legacy_tree.get("tree", []):
+                    if item.get("type") != "blob":
+                        continue
+                    path = item.get("path", "")
+                    if (
+                        path.endswith(f"/{parsed.name}/{SKILL_MARKER}")
+                        or path == f"{parsed.name}/{SKILL_MARKER}"
+                    ):
+                        skill_md_path = path
+                        repo = LEGACY_DEFAULT_REPO_NAME
+                        used_legacy = True
+                        tree_data = legacy_tree
+                        break
+            except RepoNotFoundError:
+                pass
+
     if not skill_md_path:
         raise SkillNotFoundError(
             f"Skill '{parsed.name}' not found in repository '{owner}/{repo}'"
         )
 
     # Fetch SKILL.md content
-    content_url = (
-        f"https://api.github.com/repos/{owner}/{repo}/contents/{skill_md_path}"
-    )
+    content_url = f"https://api.github.com/repos/{owner}/{repo}/contents/{skill_md_path}"
     content_data = _github_api_request(content_url)
 
     description = None
@@ -256,6 +334,15 @@ def skill_info(handle: str) -> SkillInfo:
 
         content = base64.b64decode(content_data.get("content", "")).decode()
         description = _extract_description(content)
+
+    if used_legacy:
+        warnings.warn(
+            DEPRECATION_MESSAGE.format(
+                owner=owner, repo=LEGACY_DEFAULT_REPO_NAME, name=parsed.name
+            ),
+            UserWarning,
+            stacklevel=2,
+        )
 
     # Construct handle
     if repo == DEFAULT_REPO_NAME:

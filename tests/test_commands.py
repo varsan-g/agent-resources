@@ -194,6 +194,43 @@ class TestSyncCommand:
         captured = capsys.readouterr()
         assert "up to date" in captured.out.lower()
 
+    def test_sync_owner_only_respects_source(self, git_project, monkeypatch):
+        """sync uses dependency source for owner-only handles."""
+        from agr.commands.sync import run_sync
+
+        (git_project / "agr.toml").write_text(
+            'default_source = "custom"\n'
+            "\n"
+            "dependencies = [\n"
+            '  { handle = "testuser/test-skill", type = "skill", source = "custom" },\n'
+            "]\n"
+            "\n"
+            "[[source]]\n"
+            'name = "custom"\n'
+            'type = "git"\n'
+            'url = "https://example.com/{owner}/{repo}.git"\n'
+            "\n"
+            'tools = ["claude"]\n'
+        )
+
+        captured: dict[str, str | None] = {}
+
+        def fake_fetch_and_install(
+            handle, repo_root, tools, overwrite, resolver, source
+        ) -> None:
+            captured["source"] = source
+
+        monkeypatch.setattr(
+            "agr.commands.sync.fetch_and_install_to_tools", fake_fetch_and_install
+        )
+        monkeypatch.setattr(
+            "agr.commands.sync.is_skill_installed", lambda *args, **kwargs: False
+        )
+
+        run_sync()
+
+        assert captured["source"] == "custom"
+
     @skip_on_windows
     def test_sync_migrates_colon_directories(self, git_project, capsys):
         """Sync should rename colon-based directories to double-hyphen."""

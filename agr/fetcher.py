@@ -1,6 +1,7 @@
 """GitHub download and skill installation."""
 
 import logging
+import warnings
 import os
 import shutil
 import subprocess
@@ -16,7 +17,7 @@ from agr.exceptions import (
     RepoNotFoundError,
     SkillNotFoundError,
 )
-from agr.handle import INSTALLED_NAME_SEPARATOR, ParsedHandle
+from agr.handle import INSTALLED_NAME_SEPARATOR, ParsedHandle, iter_repo_candidates
 from agr.metadata import build_handle_id, read_skill_metadata, write_skill_metadata
 from agr.skill import (
     SKILL_MARKER,
@@ -722,38 +723,49 @@ def install_remote_skill(
         raise ValueError("install_remote_skill requires a remote handle")
 
     resolver = resolver or SourceResolver(default_sources(), DEFAULT_SOURCE_NAME)
-    owner, repo_name = handle.get_github_repo()
+    owner = handle.username or ""
+    repo_candidates = iter_repo_candidates(handle.repo)
 
-    for source_config in resolver.ordered(source):
-        try:
-            with downloaded_repo(source_config, owner, repo_name) as repo_dir:
-                skill_source = prepare_repo_for_skill(repo_dir, handle.name)
-                if skill_source is None:
-                    continue
-                install_handle = (
-                    ParsedHandle(
-                        username=handle.username,
-                        repo=handle.repo,
-                        name=install_name,
+    for repo_name, is_legacy in repo_candidates:
+        for source_config in resolver.ordered(source):
+            try:
+                with downloaded_repo(source_config, owner, repo_name) as repo_dir:
+                    skill_source = prepare_repo_for_skill(repo_dir, handle.name)
+                    if skill_source is None:
+                        continue
+                    install_handle = (
+                        ParsedHandle(
+                            username=handle.username,
+                            repo=handle.repo,
+                            name=install_name,
+                        )
+                        if install_name
+                        else handle
                     )
-                    if install_name
-                    else handle
-                )
-                return install_skill_from_repo(
-                    repo_dir,
-                    handle.name,
-                    install_handle,
-                    skills_dir,
-                    tool,
-                    repo_root,
-                    overwrite,
-                    install_source=source_config.name,
-                    skill_source=skill_source,
-                )
-        except RepoNotFoundError:
-            if source is not None:
-                raise
-            continue
+                    if is_legacy:
+                        warnings.warn(
+                            "Deprecated: owner-only handles now default to the 'skills' "
+                            "repo. Falling back to the legacy 'agent-resources' repo. "
+                            "Use an explicit handle like 'owner/agent-resources/skill' "
+                            "or move/rename your repo to 'skills'.",
+                            UserWarning,
+                            stacklevel=2,
+                        )
+                    return install_skill_from_repo(
+                        repo_dir,
+                        handle.name,
+                        install_handle,
+                        skills_dir,
+                        tool,
+                        repo_root,
+                        overwrite,
+                        install_source=source_config.name,
+                        skill_source=skill_source,
+                    )
+            except RepoNotFoundError:
+                if source is not None:
+                    raise
+                continue
 
     raise SkillNotFoundError(
         f"Skill '{handle.name}' not found in sources: "
@@ -865,37 +877,48 @@ def fetch_and_install_to_tools(
 
     # Remote: download once, install to all
     resolver = resolver or SourceResolver(default_sources(), DEFAULT_SOURCE_NAME)
-    owner, repo_name = handle.get_github_repo()
+    owner = handle.username or ""
+    repo_candidates = iter_repo_candidates(handle.repo)
 
-    for source_config in resolver.ordered(source):
-        try:
-            with downloaded_repo(source_config, owner, repo_name) as repo_dir:
-                skill_source = prepare_repo_for_skill(repo_dir, handle.name)
-                if skill_source is None:
-                    continue
-                for tool in tools:
-                    try:
-                        skills_dir = tool.get_skills_dir(repo_root)
-                        path = install_skill_from_repo(
-                            repo_dir,
-                            handle.name,
-                            handle,
-                            skills_dir,
-                            tool,
-                            repo_root,
-                            overwrite,
-                            install_source=source_config.name,
-                            skill_source=skill_source,
+    for repo_name, is_legacy in repo_candidates:
+        for source_config in resolver.ordered(source):
+            try:
+                with downloaded_repo(source_config, owner, repo_name) as repo_dir:
+                    skill_source = prepare_repo_for_skill(repo_dir, handle.name)
+                    if skill_source is None:
+                        continue
+                    for tool in tools:
+                        try:
+                            skills_dir = tool.get_skills_dir(repo_root)
+                            path = install_skill_from_repo(
+                                repo_dir,
+                                handle.name,
+                                handle,
+                                skills_dir,
+                                tool,
+                                repo_root,
+                                overwrite,
+                                install_source=source_config.name,
+                                skill_source=skill_source,
+                            )
+                            installed[tool.name] = path
+                        except Exception:
+                            _rollback()
+                            raise
+                    if is_legacy:
+                        warnings.warn(
+                            "Deprecated: owner-only handles now default to the 'skills' "
+                            "repo. Falling back to the legacy 'agent-resources' repo. "
+                            "Use an explicit handle like 'owner/agent-resources/skill' "
+                            "or move/rename your repo to 'skills'.",
+                            UserWarning,
+                            stacklevel=2,
                         )
-                        installed[tool.name] = path
-                    except Exception:
-                        _rollback()
-                        raise
-                return installed
-        except RepoNotFoundError:
-            if source is not None:
-                raise
-            continue
+                    return installed
+            except RepoNotFoundError:
+                if source is not None:
+                    raise
+                continue
 
     raise SkillNotFoundError(
         f"Skill '{handle.name}' not found in sources: "
