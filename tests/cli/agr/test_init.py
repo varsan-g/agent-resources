@@ -14,6 +14,18 @@ class TestAgrInit:
         assert_cli(result).succeeded()
         assert (cli_project / "agr.toml").exists()
 
+    def test_init_detects_antigravity_tools(self, agr, cli_project):
+        """agr init detects Antigravity tools when .agent/skills exists."""
+        skill_dir = cli_project / ".agent" / "skills" / "alpha"
+        skill_dir.mkdir(parents=True)
+        (skill_dir / "SKILL.md").write_text("---\nname: alpha\n---\n\n# alpha\n")
+
+        result = agr("init")
+
+        assert_cli(result).succeeded()
+        config = AgrConfig.load(cli_project / "agr.toml")
+        assert "antigravity" in config.tools
+
     def test_init_adds_discovered_skills(self, agr, cli_project, cli_skill):
         """agr init adds discovered skills to agr.toml."""
         result = agr("init")

@@ -2,8 +2,8 @@
 
 All tool-specific paths and configuration are isolated in this module.
 Supports Claude Code (flat naming), OpenAI Codex (flat naming),
-Cursor (nested directories), OpenCode (flat naming), and
-GitHub Copilot (flat naming).
+Cursor (nested directories), OpenCode (flat naming),
+GitHub Copilot (flat naming), and Antigravity (flat naming).
 """
 
 from dataclasses import dataclass
@@ -133,6 +133,29 @@ COPILOT = ToolConfig(
     install_hint="Install GitHub Copilot CLI",
 )
 
+# Antigravity tool configuration (flat naming: <skill-name>)
+# Skill paths based on Antigravity documentation:
+# - Workspace: .agent/skills/
+# - Global: ~/.gemini/antigravity/skills/
+ANTIGRAVITY = ToolConfig(
+    name="antigravity",
+    config_dir=".agent",
+    skills_subdir="skills",
+    supports_nested=False,
+    global_config_dir=".gemini/antigravity",
+    cli_command=None,
+    cli_prompt_flag=None,
+    cli_force_flag=None,
+    cli_continue_flag=None,
+    cli_exec_command=None,
+    cli_continue_command=None,
+    cli_interactive_prompt_positional=False,
+    cli_interactive_prompt_flag=None,
+    suppress_stderr_non_interactive=False,
+    skill_prompt_prefix="",
+    install_hint=None,
+)
+
 # Registry of all supported tools
 TOOLS: dict[str, ToolConfig] = {
     "claude": CLAUDE,
@@ -140,6 +163,7 @@ TOOLS: dict[str, ToolConfig] = {
     "codex": CODEX,
     "opencode": OPENCODE,
     "copilot": COPILOT,
+    "antigravity": ANTIGRAVITY,
 }
 
 # Default tool names for new configurations

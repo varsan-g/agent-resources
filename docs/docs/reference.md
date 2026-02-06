@@ -22,7 +22,7 @@ title: Reference
 
 Install skills from GitHub or local paths. Skills are installed into your tool's
 skills folder (e.g. `.claude/skills/`, `.codex/skills/`, `.cursor/skills/`,
-`.opencode/skill/`, `.github/skills/`).
+`.opencode/skill/`, `.github/skills/`, `.agent/skills/`).
 
 ```bash
 agr add <handle>...
@@ -97,7 +97,7 @@ spec) and adds them to `agr.toml` as local path dependencies. It also
 detects tools from existing tool folders when available.
 
 Skills inside tool folders (e.g. `.claude/skills/`, `.codex/skills/`,
-`.cursor/skills/`, `.opencode/skill/`, `.github/skills/`) are ignored by default to keep configs
+`.cursor/skills/`, `.opencode/skill/`, `.github/skills/`, `.agent/skills/`) are ignored by default to keep configs
 clean. Use `--migrate` to move them into `./skills/`.
 
 **Options:**
@@ -135,7 +135,7 @@ Downloads the skill, runs it with the selected tool, and cleans up afterwards.
 
 - `--interactive`, `-i` — Run skill, then continue in interactive mode
 - `--prompt`, `-p` — Prompt to pass to the skill
-- `--global`, `-g` — Install to the global tool skills directory (e.g. `~/.claude/skills/`, `~/.codex/skills/`, `~/.config/opencode/skill/`) instead of the repo-local one
+- `--global`, `-g` — Install to the global tool skills directory (e.g. `~/.claude/skills/`, `~/.codex/skills/`, `~/.config/opencode/skill/`, `~/.gemini/antigravity/skills/`) instead of the repo-local one
 - `--source <name>` — Use a specific source from `agr.toml`
 
 **Examples:**

@@ -1,6 +1,15 @@
 """Tests for agr.tool module."""
 
-from agr.tool import CLAUDE, CODEX, COPILOT, CURSOR, OPENCODE, TOOLS, get_tool
+from agr.tool import (
+    ANTIGRAVITY,
+    CLAUDE,
+    CODEX,
+    COPILOT,
+    CURSOR,
+    OPENCODE,
+    TOOLS,
+    get_tool,
+)
 
 
 class TestToolConfig:
@@ -13,6 +22,7 @@ class TestToolConfig:
         assert CODEX.cli_command == "codex"
         assert OPENCODE.cli_command == "opencode"
         assert COPILOT.cli_command == "copilot"
+        assert ANTIGRAVITY.cli_command is None
 
     def test_tool_config_has_cli_flags(self):
         """ToolConfig includes CLI flag fields."""
@@ -22,6 +32,7 @@ class TestToolConfig:
         assert CODEX.cli_prompt_flag is None
         assert OPENCODE.cli_prompt_flag is None
         assert COPILOT.cli_prompt_flag == "-p"
+        assert ANTIGRAVITY.cli_prompt_flag is None
 
         # Each tool has its own force flag
         assert CLAUDE.cli_force_flag == "--dangerously-skip-permissions"
@@ -29,6 +40,7 @@ class TestToolConfig:
         assert CODEX.cli_force_flag is None
         assert OPENCODE.cli_force_flag is None
         assert COPILOT.cli_force_flag == "--allow-all-tools"
+        assert ANTIGRAVITY.cli_force_flag is None
 
         # All tools have continue flag
         assert CLAUDE.cli_continue_flag == "--continue"
@@ -36,6 +48,7 @@ class TestToolConfig:
         assert CODEX.cli_continue_flag is None
         assert OPENCODE.cli_continue_flag == "--continue"
         assert COPILOT.cli_continue_flag == "--continue"
+        assert ANTIGRAVITY.cli_continue_flag is None
 
     def test_tool_config_has_cli_commands(self):
         """ToolConfig includes CLI command fields."""
@@ -44,12 +57,14 @@ class TestToolConfig:
         assert CODEX.cli_exec_command == ["codex", "exec"]
         assert OPENCODE.cli_exec_command == ["opencode", "run"]
         assert COPILOT.cli_exec_command is None
+        assert ANTIGRAVITY.cli_exec_command is None
 
         assert CLAUDE.cli_continue_command is None
         assert CURSOR.cli_continue_command is None
         assert CODEX.cli_continue_command == ["codex", "resume", "--last"]
         assert OPENCODE.cli_continue_command is None
         assert COPILOT.cli_continue_command is None
+        assert ANTIGRAVITY.cli_continue_command is None
 
     def test_tool_config_has_output_handling(self):
         """ToolConfig includes non-interactive output controls."""
@@ -58,6 +73,7 @@ class TestToolConfig:
         assert CODEX.suppress_stderr_non_interactive is True
         assert OPENCODE.suppress_stderr_non_interactive is False
         assert COPILOT.suppress_stderr_non_interactive is False
+        assert ANTIGRAVITY.suppress_stderr_non_interactive is False
 
     def test_tool_config_has_interactive_prompt_mode(self):
         """ToolConfig includes interactive prompt mode controls."""
@@ -66,16 +82,19 @@ class TestToolConfig:
         assert CODEX.cli_interactive_prompt_positional is False
         assert OPENCODE.cli_interactive_prompt_positional is False
         assert COPILOT.cli_interactive_prompt_positional is False
+        assert ANTIGRAVITY.cli_interactive_prompt_positional is False
         assert CLAUDE.cli_interactive_prompt_flag is None
         assert CURSOR.cli_interactive_prompt_flag is None
         assert CODEX.cli_interactive_prompt_flag is None
         assert OPENCODE.cli_interactive_prompt_flag == "--prompt"
         assert COPILOT.cli_interactive_prompt_flag == "-i"
+        assert ANTIGRAVITY.cli_interactive_prompt_flag is None
         assert CLAUDE.skill_prompt_prefix == "/"
         assert CURSOR.skill_prompt_prefix == "/"
         assert CODEX.skill_prompt_prefix == "$"
         assert OPENCODE.skill_prompt_prefix == ""
         assert COPILOT.skill_prompt_prefix == "/"
+        assert ANTIGRAVITY.skill_prompt_prefix == ""
 
     def test_tool_config_has_install_hint(self):
         """ToolConfig includes install_hint field."""
@@ -84,26 +103,43 @@ class TestToolConfig:
         assert CODEX.install_hint is not None
         assert OPENCODE.install_hint is not None
         assert COPILOT.install_hint is not None
+        assert ANTIGRAVITY.install_hint is None
 
     def test_all_tools_have_cli_config(self):
         """All registered tools have CLI configuration."""
         for name, tool_config in TOOLS.items():
-            assert tool_config.cli_command is not None, f"{name} missing cli_command"
-            if tool_config.cli_prompt_flag is not None:
-                assert tool_config.cli_prompt_flag, f"{name} missing cli_prompt_flag"
-            if tool_config.cli_force_flag is not None:
-                assert tool_config.cli_force_flag, f"{name} missing cli_force_flag"
-            if tool_config.cli_continue_flag is not None:
-                assert tool_config.cli_continue_flag, (
-                    f"{name} missing cli_continue_flag"
+            if tool_config.cli_command is None:
+                assert tool_config.cli_prompt_flag is None
+                assert tool_config.cli_force_flag is None
+                assert tool_config.cli_continue_flag is None
+                assert tool_config.cli_exec_command is None
+                assert tool_config.cli_continue_command is None
+                assert tool_config.install_hint is None
+            else:
+                assert tool_config.cli_command is not None, (
+                    f"{name} missing cli_command"
                 )
-            if tool_config.cli_exec_command is not None:
-                assert tool_config.cli_exec_command, f"{name} missing cli_exec_command"
-            if tool_config.cli_continue_command is not None:
-                assert tool_config.cli_continue_command, (
-                    f"{name} missing cli_continue_command"
+                if tool_config.cli_prompt_flag is not None:
+                    assert tool_config.cli_prompt_flag, (
+                        f"{name} missing cli_prompt_flag"
+                    )
+                if tool_config.cli_force_flag is not None:
+                    assert tool_config.cli_force_flag, f"{name} missing cli_force_flag"
+                if tool_config.cli_continue_flag is not None:
+                    assert tool_config.cli_continue_flag, (
+                        f"{name} missing cli_continue_flag"
+                    )
+                if tool_config.cli_exec_command is not None:
+                    assert tool_config.cli_exec_command, (
+                        f"{name} missing cli_exec_command"
+                    )
+                if tool_config.cli_continue_command is not None:
+                    assert tool_config.cli_continue_command, (
+                        f"{name} missing cli_continue_command"
+                    )
+                assert tool_config.install_hint is not None, (
+                    f"{name} missing install_hint"
                 )
-            assert tool_config.install_hint is not None, f"{name} missing install_hint"
 
 
 class TestGetTool:
@@ -116,6 +152,7 @@ class TestGetTool:
         assert get_tool("codex") == CODEX
         assert get_tool("opencode") == OPENCODE
         assert get_tool("copilot") == COPILOT
+        assert get_tool("antigravity") == ANTIGRAVITY
 
     def test_get_tool_unknown_raises(self):
         """get_tool raises AgrError for unknown tool."""

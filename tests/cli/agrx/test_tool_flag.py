@@ -51,6 +51,12 @@ class TestAgrxToolFlag:
 
         assert_cli(result).failed().stdout_contains("codex CLI not found")
 
+    def test_agrx_tool_no_cli_antigravity(self, agrx):
+        """agrx --tool antigravity fails when no CLI is configured."""
+        result = agrx("user/skill", "--tool", "antigravity")
+
+        assert_cli(result).failed().stdout_contains("has no CLI command configured")
+
 
 class TestAgrxToolFromConfig:
     """Tests for agrx using tool from agr.toml."""

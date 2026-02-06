@@ -109,7 +109,9 @@ def main(
         typer.Option(
             "--tool",
             "-t",
-            help="Tool CLI to use (claude, cursor, codex, opencode, copilot).",
+            help=(
+                "Tool CLI to use (claude, cursor, codex, opencode, copilot, antigravity)."
+            ),
         ),
     ] = None,
     interactive: Annotated[

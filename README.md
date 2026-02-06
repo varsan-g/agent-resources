@@ -35,14 +35,14 @@ Install your first skill:
 agr add anthropics/skills/frontend-design
 ```
 
-That's it. The skill is now available in your configured tool (Claude Code, Codex, Cursor, OpenCode, or Copilot).
+That's it. The skill is now available in your configured tool (Claude Code, Codex, Cursor, OpenCode, Copilot, or Antigravity).
 
 ---
 
 ## What is agr?
 
 **agr** installs agent skills from GitHub directly into your tool's skills folder
-(`.claude/skills/`, `.codex/skills/`, `.cursor/skills/`, `.opencode/skill/`, or `.github/skills/`).
+(`.claude/skills/`, `.codex/skills/`, `.cursor/skills/`, `.opencode/skill/`, `.github/skills/`, or `.agent/skills/`).
 
 **agrx** runs skills instantly from your terminal — download, run, then clean up.
 
@@ -159,7 +159,7 @@ agr init -i    # Guided setup
 ```
 
 Skills inside tool folders (e.g. `.claude/skills/`, `.codex/skills/`,
-`.cursor/skills/`, `.opencode/skill/`, `.github/skills/`) are ignored by default. To bring them into
+`.cursor/skills/`, `.opencode/skill/`, `.github/skills/`, `.agent/skills/`) are ignored by default. To bring them into
 `./skills/`, run:
 
 ```bash
