@@ -1,6 +1,8 @@
 # Changelog
 
 ## [Unreleased]
+
+## [0.7.4] - 2026-02-06
 ### Added
 - Antigravity tool support with workspace `.agent/skills/` and global `~/.gemini/antigravity/skills/` paths
 - Antigravity CLI tests and documentation updates
