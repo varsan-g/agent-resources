@@ -143,7 +143,7 @@ class TestCodeExamples:
 class TestCliCommands:
     """Test that documented CLI commands are real."""
 
-    KNOWN_COMMANDS = {"add", "remove", "sync", "list", "init"}
+    KNOWN_COMMANDS = {"add", "remove", "sync", "list", "init", "config"}
 
     def test_documented_agr_commands_exist(self):
         """Commands documented in reference.md are known commands."""
@@ -190,6 +190,7 @@ class TestContentQuality:
             "agr sync",
             "agr list",
             "agr init",
+            "agr config",
             "agrx",
         ]:
             assert cmd in content, f"Missing documentation for {cmd}"

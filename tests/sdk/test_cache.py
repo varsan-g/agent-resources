@@ -1,5 +1,6 @@
 """Tests for cache module."""
 
+import importlib
 import threading
 from pathlib import Path
 from unittest.mock import patch
@@ -16,6 +17,8 @@ from agr.sdk.cache import (
     get_skill_cache_path,
     is_cached,
 )
+
+cache_module = importlib.import_module("agr.sdk.cache")
 
 
 class TestGetCacheDir:
@@ -187,6 +190,68 @@ class TestCacheSkill:
         with patch("agr.sdk.cache.get_cache_dir", return_value=cache_base):
             with pytest.raises(CacheError):
                 cache_skill(mock_skill_dir, "owner", "repo", "skill", "abc123")
+
+
+class TestFileLocking:
+    """Tests for platform lock backend wrappers."""
+
+    def test_windows_lock_backend(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ):
+        """Windows backend uses msvcrt.locking."""
+
+        class DummyMsvcrt:
+            LK_LOCK = 1
+            LK_UNLCK = 2
+
+            def __init__(self):
+                self.calls: list[tuple[int, int, int]] = []
+
+            def locking(self, fileno: int, mode: int, size: int) -> None:
+                self.calls.append((fileno, mode, size))
+
+        dummy = DummyMsvcrt()
+        monkeypatch.setattr(cache_module, "_LOCKS_USE_MSVCRT", True)
+        monkeypatch.setattr(cache_module, "_msvcrt", dummy)
+        monkeypatch.setattr(cache_module, "_fcntl", None)
+
+        lock_file = tmp_path / "lockfile"
+        with lock_file.open("w+") as lock_fd:
+            cache_module._acquire_file_lock(lock_fd)
+            cache_module._release_file_lock(lock_fd)
+
+        assert len(dummy.calls) == 2
+        assert dummy.calls[0][1] == dummy.LK_LOCK
+        assert dummy.calls[0][2] == 1
+        assert dummy.calls[1][1] == dummy.LK_UNLCK
+        assert dummy.calls[1][2] == 1
+
+    def test_posix_lock_backend(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
+        """POSIX backend uses fcntl.flock."""
+
+        class DummyFcntl:
+            LOCK_EX = 1
+            LOCK_UN = 2
+
+            def __init__(self):
+                self.calls: list[tuple[int, int]] = []
+
+            def flock(self, fileno: int, mode: int) -> None:
+                self.calls.append((fileno, mode))
+
+        dummy = DummyFcntl()
+        monkeypatch.setattr(cache_module, "_LOCKS_USE_MSVCRT", False)
+        monkeypatch.setattr(cache_module, "_fcntl", dummy)
+        monkeypatch.setattr(cache_module, "_msvcrt", None)
+
+        lock_file = tmp_path / "lockfile"
+        with lock_file.open("w+") as lock_fd:
+            cache_module._acquire_file_lock(lock_fd)
+            cache_module._release_file_lock(lock_fd)
+
+        assert len(dummy.calls) == 2
+        assert dummy.calls[0][1] == dummy.LOCK_EX
+        assert dummy.calls[1][1] == dummy.LOCK_UN
 
 
 class TestClearCache:

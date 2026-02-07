@@ -2,7 +2,15 @@
 
 from rich.console import Console
 
-from agr.config import AgrConfig, Dependency, find_config, find_repo_root
+from pathlib import Path
+
+from agr.config import (
+    AgrConfig,
+    Dependency,
+    find_config,
+    find_repo_root,
+    get_or_create_global_config,
+)
 from agr.exceptions import AgrError, InvalidHandleError
 from agr.fetcher import fetch_and_install_to_tools
 from agr.handle import parse_handle
@@ -11,7 +19,10 @@ console = Console()
 
 
 def run_add(
-    refs: list[str], overwrite: bool = False, source: str | None = None
+    refs: list[str],
+    overwrite: bool = False,
+    source: str | None = None,
+    global_install: bool = False,
 ) -> None:
     """Run the add command.
 
@@ -19,23 +30,30 @@ def run_add(
         refs: List of handles or paths to add
         overwrite: Whether to overwrite existing skills
     """
-    # Find repo root
-    repo_root = find_repo_root()
-    if repo_root is None:
-        console.print("[red]Error:[/red] Not in a git repository")
-        raise SystemExit(1)
-
-    # Find or create config
-    config_path = find_config()
-    if config_path is None:
-        config_path = repo_root / "agr.toml"
-        config = AgrConfig()
+    skills_dirs: dict[str, Path] | None = None
+    if global_install:
+        repo_root = None
+        config_path, config = get_or_create_global_config()
     else:
-        config = AgrConfig.load(config_path)
+        # Find repo root
+        repo_root = find_repo_root()
+        if repo_root is None:
+            console.print("[red]Error:[/red] Not in a git repository")
+            raise SystemExit(1)
+
+        # Find or create config
+        config_path = find_config()
+        if config_path is None:
+            config_path = repo_root / "agr.toml"
+            config = AgrConfig()
+        else:
+            config = AgrConfig.load(config_path)
 
     # Get configured tools
     tools = config.get_tools()
     resolver = config.get_source_resolver()
+    if global_install:
+        skills_dirs = {tool.name: tool.get_global_skills_dir() for tool in tools}
 
     # Track results for summary
     results: list[tuple[str, bool, str]] = []  # (ref, success, message)
@@ -60,6 +78,7 @@ def run_add(
                 overwrite,
                 resolver=resolver,
                 source=source,
+                skills_dirs=skills_dirs,
             )
             installed_paths = [
                 f"{name}: {path}" for name, path in installed_paths_dict.items()
@@ -67,10 +86,16 @@ def run_add(
 
             # Add to config
             if handle.is_local:
+                path_value = ref
+                if global_install and handle.local_path is not None:
+                    if handle.local_path.is_absolute():
+                        path_value = str(handle.local_path.resolve())
+                    else:
+                        path_value = str((Path.cwd() / handle.local_path).resolve())
                 config.add_dependency(
                     Dependency(
                         type="skill",
-                        path=ref,
+                        path=path_value,
                     )
                 )
             else:

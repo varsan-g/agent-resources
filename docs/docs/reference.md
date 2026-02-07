@@ -11,6 +11,7 @@ title: Reference
 | Install a skill for your tool | `agr add <handle>` |
 | Run a skill once | `agrx <handle>` |
 | Team sync | Add to `agr.toml`, then `agr sync` |
+| Configure tool targets | `agr config tools ...` |
 | Create a new skill | `agr init <name>` |
 | Migrate old rules/commands | `agrx kasperjunge/migrate-to-skills` |
 
@@ -36,11 +37,13 @@ agr add <handle>...
 
 - `--overwrite`, `-o` — Replace existing skills
 - `--source <name>` — Use a specific source from `agr.toml`
+- `--global`, `-g` — Install globally using `~/.agr/agr.toml` and tool global directories
 
 **Examples:**
 
 ```bash
 agr add anthropics/skills/frontend-design
+agr add -g anthropics/skills/frontend-design
 agr add kasperjunge/commit kasperjunge/pr
 agr add ./my-skill
 agr add anthropics/skills/pdf --overwrite
@@ -59,6 +62,7 @@ agr remove <handle>...
 
 ```bash
 agr remove anthropics/skills/frontend-design
+agr remove -g anthropics/skills/frontend-design
 agr remove kasperjunge/commit
 agr remove ./my-skill
 ```
@@ -69,6 +73,7 @@ Install all dependencies from `agr.toml`.
 
 ```bash
 agr sync
+agr sync -g
 ```
 
 Installs any skills listed in `agr.toml` that aren't already installed.
@@ -79,6 +84,7 @@ Show all skills and their installation status.
 
 ```bash
 agr list
+agr list -g
 ```
 
 Displays skills from `agr.toml` and whether they're installed.
@@ -120,6 +126,22 @@ agr init --tools claude,codex,opencode --default-tool claude
 agr init --sync-instructions --canonical-instructions CLAUDE.md
 agr init --migrate          # Copy skills into ./skills/
 ```
+
+### agr config
+
+Manage `agr.toml` configuration, including tool selection and `agrx` defaults.
+
+```bash
+agr config tools list
+agr config tools add codex
+agr config tools set claude codex opencode
+agr config tools remove codex
+agr config tools unset codex
+agr config default-tool set codex
+agr config default-tool unset
+```
+
+`agr tools ...` remains available as a deprecated alias for `agr config tools ...`.
 
 ### agrx
 

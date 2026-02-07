@@ -2,6 +2,24 @@
 
 ## [Unreleased]
 
+### Added
+- `agr config` command group with `tools` and `default-tool` subcommands
+- Global scope flags (`-g`, `--global`) for `agr add`, `agr remove`, `agr sync`, and `agr list`
+- Global config helpers for `~/.agr/agr.toml`
+- Cross-platform cache lock backends in SDK cache (`msvcrt` on Windows, `fcntl` on POSIX)
+- CLI tests for `agr config` commands and global flag flows
+- SDK cache tests for Windows and POSIX lock wrappers
+
+### Changed
+- `agr tools` now behaves as a deprecated alias of `agr config tools` with a warning
+- Fetch/install helpers now support global installs via explicit skills directory overrides
+- README and reference docs now document `agr config` and global install/list/sync/remove commands
+- Docs tests now validate `agr config` command documentation
+
+### Fixed
+- Global local dependencies are stored as absolute paths so `sync -g` and `remove -g` work reliably across directories
+- SDK cache no longer hard-depends on Unix-only `fcntl` lock calls
+
 ## [0.7.4] - 2026-02-06
 ### Added
 - Antigravity tool support with workspace `.agent/skills/` and global `~/.gemini/antigravity/skills/` paths

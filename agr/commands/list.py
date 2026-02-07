@@ -5,7 +5,7 @@ from pathlib import Path
 from rich.console import Console
 from rich.table import Table
 
-from agr.config import AgrConfig, find_config, find_repo_root
+from agr.config import AgrConfig, find_config, find_repo_root, get_global_config_path
 from agr.fetcher import is_skill_installed
 from agr.handle import ParsedHandle, parse_handle
 from agr.tool import ToolConfig
@@ -15,9 +15,10 @@ console = Console()
 
 def _get_installation_status(
     handle: ParsedHandle,
-    repo_root: Path,
+    repo_root: Path | None,
     tools: list[ToolConfig],
     source: str | None = None,
+    skills_dirs: dict[str, Path] | None = None,
 ) -> str:
     """Get installation status across all configured tools.
 
@@ -32,7 +33,13 @@ def _get_installation_status(
     installed_tools = [
         tool.name
         for tool in tools
-        if is_skill_installed(handle, repo_root, tool, source)
+        if is_skill_installed(
+            handle,
+            repo_root,
+            tool,
+            source,
+            skills_dir=skills_dirs.get(tool.name) if skills_dirs is not None else None,
+        )
     ]
 
     if len(installed_tools) == len(tools):
@@ -43,26 +50,37 @@ def _get_installation_status(
         return "[yellow]not synced[/yellow]"
 
 
-def run_list() -> None:
+def run_list(global_install: bool = False) -> None:
     """Run the list command.
 
     Lists all dependencies from agr.toml with their sync status.
     """
-    # Find repo root
-    repo_root = find_repo_root()
-    if repo_root is None:
-        console.print("[red]Error:[/red] Not in a git repository")
-        raise SystemExit(1)
+    skills_dirs: dict[str, Path] | None = None
+    if global_install:
+        repo_root = None
+        config_path = get_global_config_path()
+        if not config_path.exists():
+            console.print("[yellow]No global agr.toml found.[/yellow]")
+            console.print("[dim]Run 'agr add -g <handle>' to create one.[/dim]")
+            return
+    else:
+        # Find repo root
+        repo_root = find_repo_root()
+        if repo_root is None:
+            console.print("[red]Error:[/red] Not in a git repository")
+            raise SystemExit(1)
 
-    # Find config
-    config_path = find_config()
-    if config_path is None:
-        console.print("[yellow]No agr.toml found.[/yellow]")
-        console.print("[dim]Run 'agr init' to create one.[/dim]")
-        return
+        # Find config
+        config_path = find_config()
+        if config_path is None:
+            console.print("[yellow]No agr.toml found.[/yellow]")
+            console.print("[dim]Run 'agr init' to create one.[/dim]")
+            return
 
     config = AgrConfig.load(config_path)
     tools = config.get_tools()
+    if global_install:
+        skills_dirs = {tool.name: tool.get_global_skills_dir() for tool in tools}
 
     if not config.dependencies:
         console.print("[yellow]No dependencies in agr.toml.[/yellow]")
@@ -96,7 +114,9 @@ def run_list() -> None:
             source_name = (
                 None if dep.is_local else (dep.source or config.default_source)
             )
-            status = _get_installation_status(handle, repo_root, tools, source_name)
+            status = _get_installation_status(
+                handle, repo_root, tools, source_name, skills_dirs
+            )
         except Exception:
             status = "[red]invalid[/red]"
 

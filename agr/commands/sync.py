@@ -5,7 +5,7 @@ from pathlib import Path
 
 from rich.console import Console
 
-from agr.config import AgrConfig, find_config, find_repo_root
+from agr.config import AgrConfig, find_config, find_repo_root, get_global_config_path
 from agr.exceptions import AgrError
 from agr.fetcher import (
     downloaded_repo,
@@ -248,13 +248,108 @@ def _migrate_flat_installed_names(
                 )
 
 
-def run_sync() -> None:
+def _run_global_sync() -> None:
+    """Sync global dependencies from ~/.agr/agr.toml."""
+    config_path = get_global_config_path()
+    if not config_path.exists():
+        console.print("[yellow]No global agr.toml found.[/yellow] Nothing to sync.")
+        console.print("[dim]Run 'agr add -g <handle>' to create one.[/dim]")
+        return
+
+    config = AgrConfig.load(config_path)
+    tools = config.get_tools()
+    skills_dirs = {tool.name: tool.get_global_skills_dir() for tool in tools}
+
+    if not config.dependencies:
+        console.print(
+            "[yellow]No dependencies in global agr.toml.[/yellow] Nothing to sync."
+        )
+        return
+
+    resolver = config.get_source_resolver()
+
+    installed = 0
+    up_to_date = 0
+    errors = 0
+
+    for dep in config.dependencies:
+        identifier = dep.identifier
+        ref = dep.path or dep.handle or ""
+        try:
+            if dep.is_local:
+                path = Path(ref)
+                handle = ParsedHandle(is_local=True, name=path.name, local_path=path)
+                source_name = None
+            else:
+                handle = parse_handle(ref, prefer_local=False)
+                source_name = dep.source or config.default_source
+
+            tools_needing_install = [
+                tool
+                for tool in tools
+                if not is_skill_installed(
+                    handle,
+                    None,
+                    tool,
+                    source_name,
+                    skills_dir=skills_dirs[tool.name],
+                )
+            ]
+
+            if not tools_needing_install:
+                console.print(f"[dim]Up to date:[/dim] {identifier}")
+                up_to_date += 1
+                continue
+
+            fetch_and_install_to_tools(
+                handle,
+                None,
+                tools_needing_install,
+                overwrite=False,
+                resolver=resolver,
+                source=source_name,
+                skills_dirs=skills_dirs,
+            )
+            console.print(f"[green]Installed:[/green] {identifier}")
+            installed += 1
+        except FileExistsError as e:
+            console.print(f"[red]Error:[/red] {identifier}")
+            console.print(f"  [dim]{e}[/dim]")
+            errors += 1
+        except AgrError as e:
+            console.print(f"[red]Error:[/red] {identifier}")
+            console.print(f"  [dim]{e}[/dim]")
+            errors += 1
+        except Exception as e:
+            console.print(f"[red]Error:[/red] {identifier}")
+            console.print(f"  [dim]Unexpected: {e}[/dim]")
+            errors += 1
+
+    console.print()
+    parts = []
+    if installed:
+        parts.append(f"{installed} installed")
+    if up_to_date:
+        parts.append(f"{up_to_date} up to date")
+    if errors:
+        parts.append(f"{errors} failed")
+    console.print(f"[bold]Summary:[/bold] {', '.join(parts)}")
+
+    if errors:
+        raise SystemExit(1)
+
+
+def run_sync(global_install: bool = False) -> None:
     """Run the sync command.
 
     Installs all dependencies from agr.toml that aren't already installed.
     Also migrates any legacy colon-based directory names to the new
     Windows-compatible double-hyphen format (for flat tools only).
     """
+    if global_install:
+        _run_global_sync()
+        return
+
     # Find repo root
     repo_root = find_repo_root()
     if repo_root is None:

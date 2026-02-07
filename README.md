@@ -52,6 +52,7 @@ That's it. The skill is now available in your configured tool (Claude Code, Code
 
 ```bash
 agr add anthropics/skills/frontend-design     # Install a skill
+agr add -g anthropics/skills/frontend-design  # Install globally for your user
 agr add anthropics/skills/pdf anthropics/skills/mcp-builder   # Install multiple
 agr add anthropics/skills/pdf --source github # Install from an explicit source
 ```
@@ -173,11 +174,17 @@ agr init --migrate
 | Command | Description |
 |---------|-------------|
 | `agr add <handle>` | Install a skill |
+| `agr add -g <handle>` | Install a skill globally |
 | `agr remove <handle>` | Uninstall a skill |
+| `agr remove -g <handle>` | Uninstall a global skill |
 | `agr sync` | Install all from agr.toml |
+| `agr sync -g` | Sync global dependencies |
 | `agr list` | Show installed skills |
+| `agr list -g` | Show global skills |
 | `agr init` | Create agr.toml |
 | `agr init <name>` | Create a new skill |
+| `agr config tools ...` | Manage configured tools |
+| `agr config default-tool ...` | Manage agrx default tool |
 | `agrx <handle>` | Run skill temporarily |
 
 ---

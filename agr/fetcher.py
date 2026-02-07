@@ -672,8 +672,7 @@ def install_local_skill(
         is_local=True, name=source_path.name, local_path=source_path
     )
     if repo_root is None:
-        # dest_dir is typically <repo>/.tool/skills
-        repo_root = dest_dir.parent.parent
+        repo_root = Path.cwd()
 
     default_dest = dest_dir / handle.to_skill_path(tool)
     if source_path.resolve() == default_dest.resolve() and is_valid_skill_dir(
@@ -775,17 +774,18 @@ def install_remote_skill(
 
 def fetch_and_install(
     handle: ParsedHandle,
-    repo_root: Path,
+    repo_root: Path | None,
     tool: ToolConfig = DEFAULT_TOOL,
     overwrite: bool = False,
     resolver: SourceResolver | None = None,
     source: str | None = None,
+    skills_dir: Path | None = None,
 ) -> Path:
     """Fetch and install a skill.
 
     Args:
         handle: Parsed handle (remote or local)
-        repo_root: Repository root path
+        repo_root: Repository root path (project installs) or None (global installs)
         tool: Tool configuration for path structure
         overwrite: Whether to overwrite existing
 
@@ -795,7 +795,10 @@ def fetch_and_install(
     Raises:
         Various exceptions on failure
     """
-    skills_dir = tool.get_skills_dir(repo_root)
+    if skills_dir is None:
+        if repo_root is None:
+            raise ValueError("repo_root is required when skills_dir is not provided")
+        skills_dir = tool.get_skills_dir(repo_root)
 
     if handle.is_local:
         # Local skill installation
@@ -804,10 +807,16 @@ def fetch_and_install(
 
         source_path = handle.local_path
         if not source_path.is_absolute():
-            source_path = (repo_root / source_path).resolve()
+            base_path = repo_root or Path.cwd()
+            source_path = (base_path / source_path).resolve()
+        resolved_handle = ParsedHandle(
+            is_local=True,
+            name=handle.name,
+            local_path=source_path,
+        )
 
         return install_local_skill(
-            source_path, skills_dir, tool, overwrite, repo_root, handle
+            source_path, skills_dir, tool, overwrite, repo_root, resolved_handle
         )
 
     # Remote skill installation
@@ -824,11 +833,12 @@ def fetch_and_install(
 
 def fetch_and_install_to_tools(
     handle: ParsedHandle,
-    repo_root: Path,
+    repo_root: Path | None,
     tools: list[ToolConfig],
     overwrite: bool = False,
     resolver: SourceResolver | None = None,
     source: str | None = None,
+    skills_dirs: dict[str, Path] | None = None,
 ) -> dict[str, Path]:
     """Fetch skill once and install to multiple tools.
 
@@ -837,7 +847,7 @@ def fetch_and_install_to_tools(
 
     Args:
         handle: Parsed handle (remote or local)
-        repo_root: Repository root path
+        repo_root: Repository root path (project installs) or None (global installs)
         tools: List of tool configurations to install to
         overwrite: Whether to overwrite existing installations
 
@@ -867,8 +877,17 @@ def fetch_and_install_to_tools(
         # Local: no download needed, just iterate with rollback
         for tool in tools:
             try:
+                target_skills_dir = (
+                    skills_dirs.get(tool.name) if skills_dirs is not None else None
+                )
                 installed[tool.name] = fetch_and_install(
-                    handle, repo_root, tool, overwrite, resolver, source
+                    handle,
+                    repo_root,
+                    tool,
+                    overwrite,
+                    resolver,
+                    source,
+                    skills_dir=target_skills_dir,
                 )
             except Exception:
                 _rollback()
@@ -889,7 +908,17 @@ def fetch_and_install_to_tools(
                         continue
                     for tool in tools:
                         try:
-                            skills_dir = tool.get_skills_dir(repo_root)
+                            skills_dir = (
+                                skills_dirs.get(tool.name)
+                                if skills_dirs is not None
+                                else None
+                            )
+                            if skills_dir is None:
+                                if repo_root is None:
+                                    raise ValueError(
+                                        "repo_root is required when skills_dirs is not provided"
+                                    )
+                                skills_dir = tool.get_skills_dir(repo_root)
                             path = install_skill_from_repo(
                                 repo_dir,
                                 handle.name,
@@ -930,22 +959,29 @@ def fetch_and_install_to_tools(
 
 def uninstall_skill(
     handle: ParsedHandle,
-    repo_root: Path,
+    repo_root: Path | None,
     tool: ToolConfig = DEFAULT_TOOL,
     source: str | None = None,
+    skills_dir: Path | None = None,
 ) -> bool:
     """Uninstall a skill.
 
     Args:
         handle: Parsed handle identifying the skill
-        repo_root: Repository root path
+        repo_root: Repository root path (project installs) or None (global installs)
         tool: Tool configuration for path structure
 
     Returns:
         True if removed, False if not found
     """
-    skills_dir = tool.get_skills_dir(repo_root)
-    skill_path = _find_existing_skill_dir(handle, skills_dir, tool, repo_root, source)
+    target_skills_dir = skills_dir
+    if target_skills_dir is None:
+        if repo_root is None:
+            raise ValueError("repo_root is required when skills_dir is not provided")
+        target_skills_dir = tool.get_skills_dir(repo_root)
+    skill_path = _find_existing_skill_dir(
+        handle, target_skills_dir, tool, repo_root, source
+    )
 
     if not skill_path:
         return False
@@ -954,7 +990,7 @@ def uninstall_skill(
 
     # Clean up empty parent directories for nested structures
     if tool.supports_nested:
-        _cleanup_empty_parents(skill_path.parent, skills_dir)
+        _cleanup_empty_parents(skill_path.parent, target_skills_dir)
 
     return True
 
@@ -1021,20 +1057,27 @@ def get_installed_skills(repo_root: Path, tool: ToolConfig = DEFAULT_TOOL) -> li
 
 def is_skill_installed(
     handle: ParsedHandle,
-    repo_root: Path,
+    repo_root: Path | None,
     tool: ToolConfig = DEFAULT_TOOL,
     source: str | None = None,
+    skills_dir: Path | None = None,
 ) -> bool:
     """Check if a skill is installed.
 
     Args:
         handle: Parsed handle identifying the skill
-        repo_root: Repository root path
+        repo_root: Repository root path (project installs) or None (global installs)
         tool: Tool configuration for path structure
 
     Returns:
         True if installed
     """
-    skills_dir = tool.get_skills_dir(repo_root)
-    skill_path = _find_existing_skill_dir(handle, skills_dir, tool, repo_root, source)
+    target_skills_dir = skills_dir
+    if target_skills_dir is None:
+        if repo_root is None:
+            raise ValueError("repo_root is required when skills_dir is not provided")
+        target_skills_dir = tool.get_skills_dir(repo_root)
+    skill_path = _find_existing_skill_dir(
+        handle, target_skills_dir, tool, repo_root, source
+    )
     return bool(skill_path and is_valid_skill_dir(skill_path))

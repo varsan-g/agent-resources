@@ -10,7 +10,14 @@ from agr.commands.init import run_init
 from agr.commands.list import run_list
 from agr.commands.remove import run_remove
 from agr.commands.sync import run_sync
-from agr.commands.tools import run_tools_add, run_tools_list, run_tools_remove
+from agr.commands.tools import (
+    run_default_tool_set,
+    run_default_tool_unset,
+    run_tools_add,
+    run_tools_list,
+    run_tools_remove,
+    run_tools_set,
+)
 
 app = typer.Typer(
     name="agr",
@@ -19,10 +26,34 @@ app = typer.Typer(
     add_completion=False,
 )
 
-# Tools sub-app
-tools_app = typer.Typer(
+# Config sub-app
+config_app = typer.Typer(
+    name="config",
+    help="Manage agr.toml configuration.",
+    no_args_is_help=True,
+)
+app.add_typer(config_app, name="config")
+
+# Config tools sub-app
+config_tools_app = typer.Typer(
     name="tools",
     help="Manage configured tools.",
+    no_args_is_help=False,  # Default to list
+)
+config_app.add_typer(config_tools_app, name="tools")
+
+# Config default-tool sub-app
+default_tool_app = typer.Typer(
+    name="default-tool",
+    help="Manage default tool used by agrx.",
+    no_args_is_help=True,
+)
+config_app.add_typer(default_tool_app, name="default-tool")
+
+# Backwards-compatible tools alias
+tools_app = typer.Typer(
+    name="tools",
+    help="Deprecated alias for 'agr config tools'.",
     no_args_is_help=False,  # Default to list
 )
 app.add_typer(tools_app, name="tools")
@@ -55,14 +86,15 @@ def main(
 # Tools subcommand group
 @tools_app.callback(invoke_without_command=True)
 def tools_default(ctx: typer.Context) -> None:
-    """List configured tools (default behavior)."""
+    """Deprecated alias callback for agr tools commands."""
+    typer.echo("Warning: 'agr tools' is deprecated. Use 'agr config tools' instead.")
     if ctx.invoked_subcommand is None:
         run_tools_list()
 
 
 @tools_app.command("list")
 def tools_list() -> None:
-    """List configured tools."""
+    """Deprecated alias for agr config tools list."""
     run_tools_list()
 
 
@@ -73,7 +105,7 @@ def tools_add(
         typer.Argument(help="Tool names to add."),
     ],
 ) -> None:
-    """Add tools and sync existing dependencies to them."""
+    """Deprecated alias for agr config tools add."""
     run_tools_add(names)
 
 
@@ -84,8 +116,83 @@ def tools_remove(
         typer.Argument(help="Tool names to remove."),
     ],
 ) -> None:
+    """Deprecated alias for agr config tools remove."""
+    run_tools_remove(names)
+
+
+# Config tools subcommand group
+@config_tools_app.callback(invoke_without_command=True)
+def config_tools_default(ctx: typer.Context) -> None:
+    """List configured tools (default behavior)."""
+    if ctx.invoked_subcommand is None:
+        run_tools_list()
+
+
+@config_tools_app.command("list")
+def config_tools_list() -> None:
+    """List configured tools."""
+    run_tools_list()
+
+
+@config_tools_app.command("add")
+def config_tools_add(
+    names: Annotated[
+        list[str],
+        typer.Argument(help="Tool names to add."),
+    ],
+) -> None:
+    """Add tools and sync existing dependencies to them."""
+    run_tools_add(names)
+
+
+@config_tools_app.command("set")
+def config_tools_set(
+    names: Annotated[
+        list[str],
+        typer.Argument(help="Tool names to set (replaces current list)."),
+    ],
+) -> None:
+    """Replace configured tools with the provided list."""
+    run_tools_set(names)
+
+
+@config_tools_app.command("remove")
+def config_tools_remove(
+    names: Annotated[
+        list[str],
+        typer.Argument(help="Tool names to remove."),
+    ],
+) -> None:
     """Remove tools and delete their installed skills."""
     run_tools_remove(names)
+
+
+@config_tools_app.command("unset")
+def config_tools_unset(
+    names: Annotated[
+        list[str],
+        typer.Argument(help="Tool names to unset (alias of remove)."),
+    ],
+) -> None:
+    """Alias of remove."""
+    run_tools_remove(names)
+
+
+@default_tool_app.command("set")
+def default_tool_set(
+    name: Annotated[
+        str,
+        typer.Argument(help="Tool name to set as default."),
+    ],
+) -> None:
+    """Set the default tool used by agrx."""
+    run_default_tool_set(name)
+
+
+@default_tool_app.command("unset")
+def default_tool_unset() -> None:
+    """Unset the default tool (agrx falls back to first configured tool)."""
+    run_default_tool_unset()
 
 
 @app.command()
@@ -192,6 +299,14 @@ def add(
             help="Source name to use for this install.",
         ),
     ] = None,
+    global_install: Annotated[
+        bool,
+        typer.Option(
+            "--global",
+            "-g",
+            help="Install globally using ~/.agr/agr.toml and per-tool global skill directories.",
+        ),
+    ] = False,
 ) -> None:
     """Add skills from GitHub or local paths.
 
@@ -201,7 +316,7 @@ def add(
         agr add ./my-skill
         agr add kasperjunge/commit kasperjunge/pr  # Multiple
     """
-    run_add(refs, overwrite, source)
+    run_add(refs, overwrite, source, global_install=global_install)
 
 
 @app.command()
@@ -212,32 +327,58 @@ def remove(
             help="Skill handles or paths to remove.",
         ),
     ],
+    global_install: Annotated[
+        bool,
+        typer.Option(
+            "--global",
+            "-g",
+            help="Remove from global installation (~/.agr/agr.toml).",
+        ),
+    ] = False,
 ) -> None:
-    """Remove skills from the project.
+    """Remove skills from the current scope.
 
     Examples:
         agr remove kasperjunge/commit
         agr remove ./my-skill
     """
-    run_remove(refs)
+    run_remove(refs, global_install=global_install)
 
 
 @app.command()
-def sync() -> None:
-    """Install all skills from agr.toml.
+def sync(
+    global_install: Annotated[
+        bool,
+        typer.Option(
+            "--global",
+            "-g",
+            help="Sync global dependencies from ~/.agr/agr.toml.",
+        ),
+    ] = False,
+) -> None:
+    """Install all skills from the current scope config.
 
     Installs any dependencies that aren't already installed.
     """
-    run_sync()
+    run_sync(global_install=global_install)
 
 
 @app.command(name="list")
-def list_cmd() -> None:
-    """List all skills and their status.
+def list_cmd(
+    global_install: Annotated[
+        bool,
+        typer.Option(
+            "--global",
+            "-g",
+            help="List global dependencies from ~/.agr/agr.toml.",
+        ),
+    ] = False,
+) -> None:
+    """List all skills and their status for the current scope.
 
     Shows all dependencies from agr.toml and whether they're installed.
     """
-    run_list()
+    run_list(global_install=global_install)
 
 
 if __name__ == "__main__":

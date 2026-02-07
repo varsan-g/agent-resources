@@ -11,14 +11,57 @@ Cache structure:
                         └── ...
 """
 
-import fcntl
 import fnmatch
+import os
 import re
 import shutil
 import tempfile
+from typing import Any, TextIO, cast
 from pathlib import Path
 
 from agr.exceptions import CacheError
+
+_LOCKS_USE_MSVCRT = os.name == "nt"
+_msvcrt = None
+_fcntl = None
+
+if _LOCKS_USE_MSVCRT:
+    import msvcrt as _msvcrt
+else:
+    import fcntl as _fcntl
+
+
+def _acquire_file_lock(lock_fd: TextIO) -> None:
+    """Acquire an exclusive lock for a lock file descriptor."""
+    if _LOCKS_USE_MSVCRT:
+        if _msvcrt is None:
+            raise CacheError("Windows lock backend not available")
+        msvcrt = cast(Any, _msvcrt)
+        lock_fd.seek(0)
+        lock_fd.write("0")
+        lock_fd.flush()
+        lock_fd.seek(0)
+        msvcrt.locking(lock_fd.fileno(), msvcrt.LK_LOCK, 1)
+        return
+
+    if _fcntl is None:
+        raise CacheError("POSIX lock backend not available")
+    _fcntl.flock(lock_fd.fileno(), _fcntl.LOCK_EX)
+
+
+def _release_file_lock(lock_fd: TextIO) -> None:
+    """Release a previously acquired lock file descriptor."""
+    if _LOCKS_USE_MSVCRT:
+        if _msvcrt is None:
+            return
+        msvcrt = cast(Any, _msvcrt)
+        lock_fd.seek(0)
+        msvcrt.locking(lock_fd.fileno(), msvcrt.LK_UNLCK, 1)
+        return
+
+    if _fcntl is None:
+        return
+    _fcntl.flock(lock_fd.fileno(), _fcntl.LOCK_UN)
 
 
 def _sanitize_path_component(component: str, name: str) -> str:
@@ -145,7 +188,7 @@ def cache_skill(
 
         try:
             lock_fd = open(lock_file, "w")  # noqa: SIM115
-            fcntl.flock(lock_fd.fileno(), fcntl.LOCK_EX)
+            _acquire_file_lock(lock_fd)
 
             # Double-check after acquiring lock (another process may have cached)
             if cache_path.exists():
@@ -166,7 +209,7 @@ def cache_skill(
                     shutil.copytree(tmp_path, cache_path)
         finally:
             if lock_fd is not None:
-                fcntl.flock(lock_fd.fileno(), fcntl.LOCK_UN)
+                _release_file_lock(lock_fd)
                 lock_fd.close()
                 # Clean up lock file (best effort)
                 try:

@@ -1,36 +1,54 @@
 """agr remove command implementation."""
 
+from pathlib import Path
+
 from rich.console import Console
 
-from agr.config import AgrConfig, find_config, find_repo_root
+from agr.config import (
+    AgrConfig,
+    find_config,
+    find_repo_root,
+    get_global_config_path,
+)
 from agr.fetcher import uninstall_skill
 from agr.handle import parse_handle
 
 console = Console()
 
 
-def run_remove(refs: list[str]) -> None:
+def run_remove(refs: list[str], global_install: bool = False) -> None:
     """Run the remove command.
 
     Args:
         refs: List of handles or paths to remove
     """
-    # Find repo root
-    repo_root = find_repo_root()
-    if repo_root is None:
-        console.print("[red]Error:[/red] Not in a git repository")
-        raise SystemExit(1)
+    skills_dirs: dict[str, Path] | None = None
+    if global_install:
+        repo_root = None
+        config_path = get_global_config_path()
+        if not config_path.exists():
+            console.print("[red]Error:[/red] No global agr.toml found")
+            console.print("[dim]Run 'agr add -g <handle>' first.[/dim]")
+            raise SystemExit(1)
+    else:
+        # Find repo root
+        repo_root = find_repo_root()
+        if repo_root is None:
+            console.print("[red]Error:[/red] Not in a git repository")
+            raise SystemExit(1)
 
-    # Find config
-    config_path = find_config()
-    if config_path is None:
-        console.print("[red]Error:[/red] No agr.toml found")
-        raise SystemExit(1)
+        # Find config
+        config_path = find_config()
+        if config_path is None:
+            console.print("[red]Error:[/red] No agr.toml found")
+            raise SystemExit(1)
 
     config = AgrConfig.load(config_path)
 
     # Get configured tools
     tools = config.get_tools()
+    if global_install:
+        skills_dirs = {tool.name: tool.get_global_skills_dir() for tool in tools}
 
     # Track results
     results: list[tuple[str, bool, str]] = []
@@ -43,6 +61,18 @@ def run_remove(refs: list[str]) -> None:
             dep = config.get_by_identifier(ref)
             if dep is None and handle.is_local:
                 dep = config.get_by_identifier(str(handle.local_path))
+            if (
+                dep is None
+                and global_install
+                and handle.is_local
+                and handle.local_path is not None
+            ):
+                absolute_path = (
+                    handle.local_path.resolve()
+                    if handle.local_path.is_absolute()
+                    else (Path.cwd() / handle.local_path).resolve()
+                )
+                dep = config.get_by_identifier(str(absolute_path))
             if dep is None and not handle.is_local:
                 dep = config.get_by_identifier(handle.to_toml_handle())
 
@@ -53,7 +83,16 @@ def run_remove(refs: list[str]) -> None:
             # Remove from filesystem for all configured tools
             removed_fs = False
             for tool in tools:
-                if uninstall_skill(handle, repo_root, tool, source_name):
+                target_skills_dir = (
+                    skills_dirs.get(tool.name) if skills_dirs is not None else None
+                )
+                if uninstall_skill(
+                    handle,
+                    repo_root,
+                    tool,
+                    source_name,
+                    skills_dir=target_skills_dir,
+                ):
                     removed_fs = True
 
             # Remove from config
@@ -62,6 +101,18 @@ def run_remove(refs: list[str]) -> None:
             if not removed_config and handle.is_local:
                 # Try with the path
                 removed_config = config.remove_dependency(str(handle.local_path))
+            if (
+                not removed_config
+                and global_install
+                and handle.is_local
+                and handle.local_path is not None
+            ):
+                absolute_path = (
+                    handle.local_path.resolve()
+                    if handle.local_path.is_absolute()
+                    else (Path.cwd() / handle.local_path).resolve()
+                )
+                removed_config = config.remove_dependency(str(absolute_path))
             if not removed_config:
                 # Try with toml handle
                 removed_config = config.remove_dependency(handle.to_toml_handle())

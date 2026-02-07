@@ -412,3 +412,25 @@ def get_or_create_config(start_path: Path | None = None) -> tuple[Path, AgrConfi
     config.save(config_path)
 
     return config_path, config
+
+
+def get_global_config_dir() -> Path:
+    """Get global agr config directory (~/.agr)."""
+    return Path.home() / ".agr"
+
+
+def get_global_config_path() -> Path:
+    """Get global agr config path (~/.agr/agr.toml)."""
+    return get_global_config_dir() / "agr.toml"
+
+
+def get_or_create_global_config() -> tuple[Path, AgrConfig]:
+    """Get existing global config or create one with defaults."""
+    config_path = get_global_config_path()
+    if config_path.exists():
+        return config_path, AgrConfig.load(config_path)
+
+    config_path.parent.mkdir(parents=True, exist_ok=True)
+    config = AgrConfig()
+    config.save(config_path)
+    return config_path, config
