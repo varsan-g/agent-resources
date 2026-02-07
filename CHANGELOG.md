@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.7.5] - 2026-02-07
+
 ### Added
 - `agr config` command group with `tools` and `default-tool` subcommands
 - Global scope flags (`-g`, `--global`) for `agr add`, `agr remove`, `agr sync`, and `agr list`

@@ -1,6 +1,6 @@
 """agr: Agent Resources - Install and manage agent skills."""
 
-__version__ = "0.7.4"
+__version__ = "0.7.5"
 
 from agr.sdk import Skill, SkillInfo, cache, list_skills, skill_info
 
